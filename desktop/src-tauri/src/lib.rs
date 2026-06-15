@@ -18,6 +18,7 @@ use nemurixr_core::{Config, State};
 
 mod brightness;
 mod osc;
+mod schedule;
 mod sound;
 mod vrchat;
 
@@ -179,6 +180,8 @@ pub fn run() {
     vrchat::spawn(engine.clone());
     // OSCQuery discovery of VRChat's OSC port.
     osc::spawn_discovery(engine.clone());
+    // Time-based sleep schedule.
+    schedule::spawn(engine.clone());
 
     // IPC server for the VR overlay (reads state, sends sleep/config commands).
     {

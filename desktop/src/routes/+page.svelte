@@ -7,7 +7,7 @@
   import BrightnessView from "$lib/views/BrightnessView.svelte";
   import VrchatView from "$lib/views/VrchatView.svelte";
   import OscView from "$lib/views/OscView.svelte";
-  import Placeholder from "$lib/views/Placeholder.svelte";
+  import SettingsView from "$lib/views/SettingsView.svelte";
 
   const tabs = [
     { id: "status", label: "Status" },
@@ -35,7 +35,7 @@
     {:else if active === "osc"}
       <OscView />
     {:else}
-      <Placeholder title="Settings" desc="Sleep schedule and general settings. Coming soon." />
+      <SettingsView />
     {/if}
   </main>
 </div>

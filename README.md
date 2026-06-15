@@ -39,12 +39,17 @@ automation engines themselves are the next milestones.
    mode) for live player count + current world, and plays join/leave
    notification sounds (only-when-alone / only-when-sleep). Auto-detects the
    Proton log dir; self-aware; grace period on world entry.
-4. ⏳ **Brightness & Fans engine** — apply values on sleep/wake via Bigscreen
+4. ✅ **Brightness & Fans engine** — applies values on sleep/wake via Bigscreen
    Beyond HID ([bsb-control](../bsb-control) protocol) with a `libmonado`
-   fallback for other headsets.
-5. ⏳ **Sleep schedule** — enable/disable sleep mode at set times.
-6. ⏳ **VRChat API** — auto-accept invites + status automations (needs login).
-7. ⏳ **OSC automations** — send OSC to VRChat on sleep/wake.
+   fallback for other headsets; auto-detects the backend; "Preview on headset"
+   buttons.
+5. ✅ **OSC automations** — send sequenced OSC messages to VRChat on sleep/wake,
+   with per-message delays; VRChat's OSC port found via OSCQuery (mDNS), with a
+   manual host/port fallback.
+6. ✅ **Sleep schedule** — enters/leaves sleep mode at set times (edge-triggered,
+   so a manual toggle still overrides until the next scheduled time).
+7. ⏳ **VRChat API** — auto-accept invites + status automations (needs login).
+8. ⏳ **Motion-based sleep detection** (a later version).
 
 ## Layout
 

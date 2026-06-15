@@ -137,10 +137,13 @@ pub struct OscConfig {
     pub on_wake: Vec<OscMessage>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct OscMessage {
     pub address: String,
     pub args: Vec<OscArg>,
+    /// Wait this many milliseconds before sending this message (sequences a list).
+    pub delay_ms: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -215,7 +218,7 @@ impl Default for StatusConfig {
 
 impl Default for OscConfig {
     fn default() -> Self {
-        Self { host: "127.0.0.1".to_string(), port: 9000, use_oscquery: false, on_sleep: Vec::new(), on_wake: Vec::new() }
+        Self { host: "127.0.0.1".to_string(), port: 9000, use_oscquery: true, on_sleep: Vec::new(), on_wake: Vec::new() }
     }
 }
 

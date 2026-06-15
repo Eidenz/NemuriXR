@@ -16,6 +16,8 @@ pub struct State {
     pub vrchat_status: Option<String>,
     /// Which brightness backend is in use ("Bigscreen Beyond", "libmonado", or none).
     pub brightness_backend: Option<String>,
+    /// Resolved VRChat OSC target (host:port) when discovered, else None.
+    pub osc_target: Option<String>,
     /// True while the in-headset overlay/core is running and serving IPC.
     pub overlay_running: bool,
 }
