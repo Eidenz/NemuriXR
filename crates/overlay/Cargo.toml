@@ -1,0 +1,28 @@
+[package]
+name = "nemurixr-overlay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NemuriXR in-headset overlay + always-on automation core (IPC server)"
+
+[[bin]]
+name = "nemurixr-overlay"
+path = "src/main.rs"
+
+[dependencies]
+nemurixr-core.workspace = true
+anyhow.workspace = true
+log.workspace = true
+serde_json.workspace = true
+
+# VR / graphics — versions match monado-frame / WayVR (proven on this Monado/AMD setup).
+openxr = { version = "0.21", features = ["linked"] }
+ash = "0.38"
+gpu-allocator = "0.27"
+egui = "0.31"
+egui-phosphor = "0.9"
+egui-ash-renderer = { version = "0.8", features = ["gpu-allocator"] }
+libmonado = { git = "https://github.com/wayvr-org/libmonado-rs.git", rev = "6f66b26930c24a8a2fc57ddcd85704784894c750", version = "1.6.0" }
+
+env_logger = "0.11"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

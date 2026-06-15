@@ -1,0 +1,12 @@
+[package]
+name = "nemurixr-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared config model, live state, and IPC protocol for NemuriXR"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true

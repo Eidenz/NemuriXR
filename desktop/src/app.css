@@ -1,0 +1,181 @@
+/* NemuriXR desktop — glassmorphism over a cinematic night backdrop.
+   Stack borrowed from udcap-control; the glass look is inspired by NTEM. */
+:root {
+  /* base tones (HSL components, used as `hsl(var(--x))`) */
+  --background: 245 30% 5%;
+  --foreground: 0 0% 98%;
+  --muted-foreground: 245 12% 66%;
+
+  /* accent — periwinkle/iris, a touch nocturnal */
+  --primary: 258 80% 72%;
+  --primary-foreground: 245 40% 8%;
+  --accent: 258 55% 30%;
+
+  --success: 145 55% 62%;
+  --warn: 40 95% 65%;
+  --error: 4 90% 72%;
+
+  /* glass surfaces */
+  --glass-bg: 245 24% 10%;
+  --glass-strong: 245 28% 8%;
+  --glass-border: 0 0% 100%;
+  --glass-blur: 18px;
+
+  --radius-l: 20px;
+  --radius-m: 14px;
+  --radius-s: 10px;
+  --radius-pill: 999px;
+
+  --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  margin: 0;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+/* Frosted translucent panel — the default surface for cards and chrome. */
+.glass {
+  background-color: hsl(var(--glass-bg) / 0.62);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid hsl(var(--glass-border) / 0.08);
+}
+.glass-strong {
+  background-color: hsl(var(--glass-strong) / 0.8);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+}
+
+/* Material-ish hover/press state layer. */
+.state-layer {
+  position: relative;
+  overflow: hidden;
+}
+.state-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+  pointer-events: none;
+}
+.state-layer:hover::after {
+  opacity: 0.08;
+}
+.state-layer:active::after {
+  opacity: 0.14;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 14px;
+  transition: filter 0.15s var(--ease), opacity 0.15s var(--ease);
+}
+.btn.filled {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 6px 20px hsl(var(--primary) / 0.35);
+}
+.btn.filled:hover {
+  filter: brightness(1.08);
+}
+.btn.tonal {
+  background: hsl(var(--accent) / 0.55);
+  color: hsl(var(--foreground));
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: var(--radius-pill);
+  background: hsl(var(--glass-bg) / 0.55);
+  border: 1px solid hsl(var(--glass-border) / 0.08);
+  color: hsl(var(--muted-foreground));
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: hsl(var(--muted-foreground));
+  flex: none;
+}
+.dot.on {
+  background: hsl(var(--success));
+  box-shadow: 0 0 8px hsl(var(--success) / 0.7);
+}
+.dot.warn {
+  background: hsl(var(--warn));
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.28);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.45);
+  background-clip: padding-box;
+}
+
+select {
+  color: hsl(var(--foreground));
+  color-scheme: dark;
+}
+select option {
+  background-color: hsl(var(--glass-strong));
+  color: hsl(var(--foreground));
+}
