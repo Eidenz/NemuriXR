@@ -6,9 +6,11 @@
   import Toggle from "$lib/components/Toggle.svelte";
   import Slider from "$lib/components/Slider.svelte";
 
-  // Fan control only exists on the Bigscreen Beyond (HID); the libmonado
-  // fallback can't set fans.
-  const beyond = $derived(app.state?.brightness_backend === "Bigscreen Beyond");
+  // Fan control only exists on the Bigscreen Beyond (HID); the libmonado fallback
+  // can't set fans. Show the fan sliders only when a Beyond is actually detected
+  // (Beyond owners plug in to configure fans) — otherwise hide them, so headset
+  // owners with their device disconnected aren't shown controls they can't use.
+  const showFans = $derived(app.state?.brightness_backend === "Bigscreen Beyond");
 
   // Phase → its brightness level (Awake uses on_wake, etc.).
   const cards: { key: SleepPhase; title: string; level: () => BrightnessLevel }[] = [
@@ -22,8 +24,8 @@
   <div class="view">
     <div class="head">
       <div>
-        <h2>Brightness &amp; Fans</h2>
-        <p>Each phase has its own brightness and fan level, with a fade time to ease into it.</p>
+        <h2>Brightness{#if showFans} &amp; Fans{/if}</h2>
+        <p>Each phase has its own brightness{#if showFans} and fan{/if} level, with a fade time to ease into it.</p>
       </div>
       <Toggle bind:checked={app.config.brightness.enabled} label="Brightness automations" onchange={save} />
     </div>
@@ -34,7 +36,9 @@
         <GlassCard title={c.title}>
           <div class="sliders">
             <Slider label="Brightness" suffix="%" bind:value={lvl.brightness} onchange={saveSoon} />
-            <Slider label="Fan speed" suffix="%" disabled={!beyond} bind:value={lvl.fan} onchange={saveSoon} />
+            {#if showFans}
+              <Slider label="Fan speed" suffix="%" bind:value={lvl.fan} onchange={saveSoon} />
+            {/if}
             <Slider label="Fade time" suffix="s" max={120} editable bind:value={lvl.transition_seconds} onchange={saveSoon} />
           </div>
           <button class="btn tonal state-layer preview" onclick={() => applyBrightness(c.key)}>Preview on headset</button>
@@ -42,10 +46,10 @@
       {/each}
     </div>
 
-    {#if !beyond}
+    {#if !showFans}
       <p class="note">
-        Fan control needs a Bigscreen Beyond. On other headsets, brightness is set through libmonado and the fan
-        sliders are ignored.
+        Fan control needs a Bigscreen Beyond. Plug in your Beyond to configure fan speeds; other headsets use
+        libmonado for brightness, which has no fan control.
       </p>
     {/if}
   </div>

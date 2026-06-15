@@ -1,139 +1,97 @@
-# NemuriXR
+<div align="center">
 
-A **sleeping utility for VR on Linux/Monado**, inspired by
-[OyasumiVR](https://github.com/Raphiiko/Oyasumi). *Nemuri* (眠り) means "sleep".
+# 🌙 NemuriXR
 
-It comes in two parts that talk over a local socket:
+**A sleeping utility for VR on Linux**
 
-- **Desktop app** (`desktop/`) — a **Tauri v2 + Svelte 5** window that is also the
-  always-on **engine**: it owns the config + live state, runs the
-  schedule/brightness/VRChat/OSC automations, and hosts the IPC server. It **lives
-  in the system tray** — closing the window hides it (the engine keeps running);
-  quit fully from the tray. Because it doesn't need VR, the VRChat features work in
-  desktop VRChat too. Visual style is glassmorphism over a cinematic night
-  backdrop.
-- **Overlay** (`crates/overlay`) — an in-headset OpenXR overlay (`XR_EXTX_overlay`,
-  egui on Vulkan quad layers, built on the [monado-frame](../monado-frame)
-  foundation). It shows a compact **quick menu of toggles** (Sleep Mode + feature
-  on/off switches) and is a thin **IPC client** of the desktop engine: it reflects
-  live state and sends commands. If the desktop app isn't running it shows an
-  offline notice.
+ dim your headset, quiet your audio, and let VRChat look after itself while you drift off.
 
-The desktop is the engine + full setup; the overlay is a quick in-VR remote. They
-share one config and live state through `nemurixr-core`.
+Inspired by [OyasumiVR](https://github.com/Raphiiko/Oyasumi). *Nemuri* (眠り) means "sleep".
 
-## Status
+![NemuriXR](screenshot.png)
 
-**Foundation + scaffolding done.** The overlay renders its toggle menu and runs
-the IPC server; the desktop app's shell, glass theme, Status screen, and the
-**Brightness & Fans** screen are built and wired end-to-end over IPC. The
-automation engines themselves are the next milestones.
+> **AI usage:** This project was developed with AI assistance (Anthropic's Claude), under human direction, testing, and review.
 
-### Roadmap
+</div>
 
-1. ✅ Overlay foundation + quick-menu toggles + manual Sleep Mode.
-2. ✅ Workspace split: `core` (shared model + IPC); **desktop = engine + IPC
-   server + tray**; overlay = thin IPC client. Glass desktop shell + Status +
-   Brightness screens.
-3. ✅ **VRChat join/leave (login-free)** — tails the VRChat log (VR *or* desktop
-   mode) for live player count + current world, and plays join/leave
-   notification sounds (only-when-alone / only-when-sleep). Auto-detects the
-   Proton log dir; self-aware; grace period on world entry.
-4. ✅ **Three sleep phases** — Awake → **Prepare** → Sleep, each with its own
-   brightness/fan + OSC. A "Prepare to sleep" button sits in the overlay and the
-   desktop Status screen.
-5. ✅ **Brightness & Fans engine** — per-phase brightness/fan via Bigscreen Beyond
-   HID ([bsb-control](../bsb-control) protocol) with a `libmonado` fallback;
-   auto-detects the backend; **timed fades** into each phase (configurable, and
-   cancelable when the phase changes mid-fade); "Preview on headset" buttons.
-6. ✅ **OSC automations** — per-phase, sequenced OSC messages with per-message
-   delays; VRChat's OSC port found via OSCQuery (mDNS), manual host/port fallback.
-7. ✅ **Sleep schedule** — enters/leaves sleep mode at set times (edge-triggered,
-   so a manual toggle still overrides until the next scheduled time).
-8. ✅ **VRChat API** — secure login (2FA; session token in the **OS keyring**,
-   password never stored). **Auto-accept invite requests** (whitelist/blacklist +
-   max-players + only-when-sleep) over the **pipeline websocket**, and **status
-   automations** by player count. Event-driven (no polling) + rate-limited.
-9. ✅ **Packaging + auto-launch** — desktop bundles to deb/rpm/appimage with the
-   overlay as a sidecar; the desktop watches for Monado and auto-launches the
-   overlay (no SteamVR-style manifest exists for OpenXR).
-10. ⏳ **Motion-based sleep detection** (next).
+## What it does
 
-## Layout
+NemuriXR can notice when you're heading to sleep in VR and handles the things you'd otherwise fumble with half-asleep:
 
-```
-nemurixr/                  (Rust workspace: overlay + core)
-  crates/
-    core/                  nemurixr-core — shared Config, live State, IPC protocol
-    overlay/               nemurixr-overlay — OpenXR overlay, thin IPC client
-  desktop/                 (its own workspace)
-    src/                   Svelte 5 (SvelteKit, adapter-static SPA): glass UI
-    src-tauri/             Tauri v2 backend — the engine + IPC server (+ tray)
-```
+- **🌙 Sleep Mode, in three phases**: *Awake → Prepare → Sleep*. Switch it manually, on a schedule, or automatically once you stop moving. Motion detection can be calibrated in-headset so it knows how *you* sleep.
+- **🔆 Brightness & fans**: ease the panel brightness and fan speed down as you settle in, with smooth fades. Native control for the **Bigscreen Beyond**; other Monado headsets dim through libmonado.
+- **🔊 Audio volume**: lower your output volume and mute your mic per phase. It finds the device VRChat is actually playing through and adjusts that one, falling back to your default device.
+- **🎮 VRChat, hands-free**:
+  - Join/leave **notification sounds** and a live player count, read straight from the game log.
+  - **Auto-accept invite requests** from chosen friends, with player-count limits and an optional custom invite message *(signing in unlocks this)*.
+  - **Status automations**: flip to *Ask Me* or *Busy* as your world fills up.
+- **📡 OSC automations**: send sequences of OSC messages on each phase (avatar toggles, other apps, and so on).
 
-The overlay's `src/overlay/` module is a trimmed lift of monado-frame's overlay
-toolkit (session/panel/input/laser).
+You set everything up in a desktop app, and reach the toggles you actually want in VR from a quick in-headset menu.
 
-## Build & run
+## How it works
 
-**Desktop app (the engine — run this first, keep it in the tray):**
+NemuriXR has two parts that share one configuration:
+
+- **Desktop app**: where you set everything up. It runs the automations in the background and sits in the system tray, so the VRChat and OSC features keep working.
+- **In-headset overlay**: a compact quick menu (Sleep Mode, feature toggles, and pose calibration) you open in VR. The desktop app launches it for you when VR starts.
+
+## Requirements
+
+- **Linux** with a **Monado**-based OpenXR runtime (for example, set up with Envision).
+- **PipeWire / PulseAudio** (`pactl`) for the audio features.
+- A **Bigscreen Beyond** for fan control and native brightness (optional) other headsets still dim via libmonado.
+- **VRChat** via Steam/Proton for the VRChat features.
+
+On GNOME the system tray needs the AppIndicator extension; on KDE it works out of the box.
+
+## Install
+
+### From release
+- Just head over to the [lates release]() and download the file for your distro.
+
+### Build from source
+Build a package and install it:
 
 ```bash
 cd desktop
 pnpm install
-pnpm tauri dev      # or: pnpm tauri build
+pnpm tauri build
 ```
 
-Closing the window hides it to the tray; the engine keeps running. Quit fully from
-the tray menu. (Linux tray needs a StatusNotifier host — native on KDE; on GNOME
-install the AppIndicator extension and `libappindicator-gtk3`.)
+This produces a `.rpm`, `.deb`, and `.AppImage` in `desktop/src-tauri/target/release/bundle/`, install the one for your distro. On Fedora/Nobara the rpm and AppImage work out of the box; the `.deb` needs `dpkg`. The in-headset overlay is bundled inside the package, so there's nothing else to install.
 
-**Overlay:** you normally don't launch this yourself — the desktop app
-**auto-launches it** when a Monado VR session starts (and it exits when VR ends).
-There's also a "Launch VR overlay" button + an auto-launch toggle in Settings →
-General. To run it standalone for development:
+## Using it
 
-```bash
-cargo run -p nemurixr-overlay
-```
+1. Launch NemuriXR and set up your phases, brightness, audio, and VRChat options.
+2. *(Optional)* Sign in under **Settings → VRChat Account** to unlock auto-accept and status automations. Your password is never stored, the session token is kept in your system keyring.
+3. Put on your headset; the overlay opens automatically. **Double-tap A** on the right controller to open the quick menu (point + trigger to click, grip to move it).
+4. *(Optional)* For motion-based sleep, turn it on under **Settings → Sleep Detection**, then calibrate in-headset: open the menu → **Calibrate sleep pose**, lie the way you sleep, and capture.
 
-Requires an OpenXR runtime (Monado) with `XR_KHR_vulkan_enable2` and
-`XR_EXTX_overlay`. Double-tap **A** (right controller) to open the quick menu; point + trigger
-to click, grip to move it. It connects to the desktop engine; if the desktop app
-isn't running it shows an offline notice.
+## Bigscreen Beyond
 
-## Packaging
-
-```bash
-cd desktop
-pnpm tauri:build      # stages the overlay sidecar, then bundles deb + rpm + appimage
-```
-
-Output: `desktop/src-tauri/target/release/bundle/{deb,rpm,appimage}/`. The overlay
-binary is bundled as a Tauri sidecar so the single package contains both parts.
-On Fedora/Nobara the rpm + AppImage build out of the box; the `.deb` target needs
-`dpkg` (`sudo dnf install dpkg`).
-
-## Configuration
-
-Settings persist at `~/.config/nemurixr/config.json` (XDG-aware), owned by the
-core and edited by either UI.
-
-Overlay env vars: `NEMURI_OPACITY` (0–1, default 0.92), `NEMURI_NO_ALPHA`,
-`NEMURI_NO_LASER`.
-
-## Hardware control (milestone 3)
-
-Bigscreen Beyond brightness/fan control uses its HID protocol (VID `0x35BD` /
-PID `0x0101`), needing the same udev rule as bsb-control:
+Brightness and fan control talk to the Beyond over HID, which needs a udev rule (the same one bsb-control uses):
 
 ```
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="35bd", ATTRS{idProduct}=="0101", MODE="0660", GROUP="wheel"
 ```
 
-## IPC
+Without it, or on any other headset, brightness falls back to libmonado and fan control isn't available.
 
-A Unix socket at `$XDG_RUNTIME_DIR/nemurixr.sock` carries newline-delimited JSON
-(`GetConfig` / `SetConfig` / `GetState` / `SetSleep`). The **desktop** backend is
-the server (the engine); the **overlay** is the client. The desktop's own frontend
-talks to the engine in-process via Tauri commands.
+## Development
+
+```bash
+# Desktop app (the engine + UI)
+cd desktop && pnpm install && pnpm tauri dev
+
+# Overlay on its own (normally the desktop app launches it for you)
+cargo run -p nemurixr-overlay
+```
+
+The project is a Rust workspace `crates/core` (shared config, live state, and the IPC protocol) and `crates/overlay` (the OpenXR overlay) alongside `desktop/`, a Tauri v2 + Svelte 5 app that hosts the always-on engine and has a tray. The two halves talk over a Unix socket, with the desktop as the server. Config lives at `~/.config/nemurixr/config.json`.
+
+Overlay environment variables: `NEMURI_OPACITY` (0–1), `NEMURI_NO_ALPHA`, `NEMURI_NO_LASER`.
+
+## License
+
+MIT. Inspired by [OyasumiVR](https://github.com/Raphiiko/Oyasumi).
