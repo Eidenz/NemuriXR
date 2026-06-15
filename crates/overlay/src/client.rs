@@ -6,8 +6,19 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use nemurixr_core::config::Sensitivity;
 use nemurixr_core::ipc::Client;
 use nemurixr_core::{Config, SleepPhase, State};
+
+/// The sleep-detection settings the overlay needs each frame.
+pub struct Detection {
+    pub enabled: bool,
+    pub always: bool,
+    pub start: String,
+    pub end: String,
+    pub sensitivity: Sensitivity,
+    pub minutes: u32,
+}
 
 enum Cmd {
     SetPhase(SleepPhase),
@@ -48,6 +59,19 @@ impl EngineLink {
 
     pub fn block_game_input(&self) -> bool {
         self.shared.lock().unwrap().config.block_game_input
+    }
+
+    pub fn detection(&self) -> Detection {
+        let g = self.shared.lock().unwrap();
+        let s = &g.config.sleep;
+        Detection {
+            enabled: s.detection_enabled,
+            always: s.detection_always,
+            start: s.detect_start.clone(),
+            end: s.detect_end.clone(),
+            sensitivity: s.detection_sensitivity,
+            minutes: s.detection_minutes,
+        }
     }
 
     /// Optimistically reflect the change locally, then queue it for the engine.

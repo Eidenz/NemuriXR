@@ -37,6 +37,29 @@ pub struct SleepConfig {
     pub sleep_at: String,
     /// "HH:MM" local time to wake (empty = unset).
     pub wake_at: String,
+
+    // ---- motion-based sleep detection ----
+    /// Enter sleep automatically after the headset stays still.
+    pub detection_enabled: bool,
+    /// Watch always (true), or only inside the detect_start..detect_end window.
+    pub detection_always: bool,
+    /// "HH:MM" detection-window start (used when not `detection_always`).
+    pub detect_start: String,
+    /// "HH:MM" detection-window end.
+    pub detect_end: String,
+    /// How forgiving stillness detection is.
+    pub detection_sensitivity: Sensitivity,
+    /// Minutes of stillness before the (cancelable) sleep countdown.
+    pub detection_minutes: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Sensitivity {
+    Low,
+    #[default]
+    Medium,
+    High,
 }
 
 // ---- Brightness & fans ----------------------------------------------------
@@ -165,7 +188,17 @@ pub enum OscArg {
 
 impl Default for SleepConfig {
     fn default() -> Self {
-        Self { schedule_enabled: false, sleep_at: String::new(), wake_at: String::new() }
+        Self {
+            schedule_enabled: false,
+            sleep_at: String::new(),
+            wake_at: String::new(),
+            detection_enabled: false,
+            detection_always: true,
+            detect_start: String::new(),
+            detect_end: String::new(),
+            detection_sensitivity: Sensitivity::Medium,
+            detection_minutes: 15,
+        }
     }
 }
 

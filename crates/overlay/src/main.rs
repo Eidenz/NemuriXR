@@ -13,6 +13,7 @@
 
 mod blocker;
 mod client;
+mod detector;
 mod mathx;
 mod overlay;
 mod theme;
@@ -24,10 +25,12 @@ use anyhow::Result;
 use openxr as xr;
 
 use blocker::Blocker;
-use client::EngineLink;
+use client::{Detection, EngineLink};
+use detector::{Detector, Tick};
 use mathx::locate_pose;
+use nemurixr_core::SleepPhase;
 use overlay::{front_pose, posef, Input, Laser, Panel, TargetId};
-use ui::{build_menu, MenuAction, Screen};
+use ui::{build_countdown, build_menu, MenuAction, Screen};
 
 const MENU: TargetId = 0;
 
@@ -71,12 +74,18 @@ fn run() -> Result<()> {
     let panel_alpha = (opacity.clamp(0.0, 1.0) * 255.0) as u8;
     log::info!("alpha_mode={alpha_mode} opacity={opacity} laser={laser_on}");
 
-    let menu_px = (980u32, 800u32);
+    let menu_px = (980u32, 880u32);
     let menu_w = 0.52f32;
     let mut menu = Panel::new(&gpu, &xr.session, menu_px, (menu_w, menu_w * menu_px.1 as f32 / menu_px.0 as f32), posef([0.0, 0.0, -1.0]))?;
     let mut laser = Laser::new(&gpu, &xr.session)?;
     let mut input = Input::new(&xr.instance, &xr.session)?;
     let mut blocker = Blocker::new();
+
+    // Motion-based sleep detection + its own (non-interactive) countdown panel.
+    let mut detector = Detector::new();
+    let cd_px = (640u32, 360u32);
+    let cd_w = 0.42f32;
+    let mut countdown = Panel::new(&gpu, &xr.session, cd_px, (cd_w, cd_w * cd_px.1 as f32 / cd_px.0 as f32), posef([0.0, 0.0, -1.0]))?;
 
     // The link to the desktop-hosted engine (background thread; never blocks us).
     let link = EngineLink::spawn();
@@ -136,8 +145,10 @@ fn run() -> Result<()> {
         let mut ptr: Option<(f32, f32, bool)> = None;
         let mut laser_ray: Option<(xr::Posef, f32)> = None;
         let mut pointing_panel = false;
+        let mut controller_active = false;
         if focused {
             input.sync(&xr.session)?;
+            controller_active = input.any_input(&xr.session)?;
             if input.a_double_press(&xr.session)? {
                 menu_visible = !menu_visible;
                 input.clear_grab();
@@ -165,40 +176,95 @@ fn run() -> Result<()> {
 
         blocker.set(pointing_panel && link.block_game_input());
 
-        if !menu_visible {
-            xr.frame_stream.end(time, xr.blend_mode, &[])?;
-            continue;
+        // Motion-based sleep detection. Only while awake, connected, and (if a
+        // window is set) inside it; the open menu pauses it. Any controller input
+        // or head movement cancels the countdown; reaching zero enters Sleep.
+        let det = link.detection();
+        let det_active = connected
+            && det.enabled
+            && phase == SleepPhase::Awake
+            && !menu_visible
+            && hmd.is_some()
+            && within_window(&det);
+        let hmd_ref = hmd.unwrap_or(xr::Posef::IDENTITY);
+        let mut countdown_secs: Option<u32> = None;
+        match detector.update(det_active, &hmd_ref, controller_active, det.sensitivity, det.minutes) {
+            Tick::Sleep => link.set_phase(SleepPhase::Sleep),
+            Tick::Counting(s) => countdown_secs = Some(s),
+            Tick::Idle => {}
         }
 
-        // Render the menu and forward its actions to the engine.
-        let clock = chrono::Local::now().format("%H:%M").to_string();
-        let mut action = MenuAction::None;
-        let mut cfg = link.config();
-        let mut cfg_changed = false;
-        menu.render(&gpu, alpha_mode, ptr, |ctx| {
-            action = build_menu(ctx, screen, phase, connected, &clock, &mut cfg, &mut cfg_changed, panel_alpha);
-        })?;
-        match action {
-            MenuAction::SetPhase(p) => link.set_phase(p),
-            MenuAction::OpenAutomations => screen = Screen::Automations,
-            MenuAction::Back => screen = Screen::Home,
-            MenuAction::None => {}
-        }
-        if cfg_changed {
-            link.set_config(cfg);
+        // Render the menu (when open) and forward its actions to the engine.
+        let mut menu_quad = None;
+        let mut laser_quad = None;
+        if menu_visible {
+            let clock = chrono::Local::now().format("%H:%M").to_string();
+            let mut action = MenuAction::None;
+            let mut cfg = link.config();
+            let mut cfg_changed = false;
+            menu.render(&gpu, alpha_mode, ptr, |ctx| {
+                action = build_menu(ctx, screen, phase, connected, &clock, &mut cfg, &mut cfg_changed, panel_alpha);
+            })?;
+            match action {
+                MenuAction::SetPhase(p) => link.set_phase(p),
+                MenuAction::OpenAutomations => screen = Screen::Automations,
+                MenuAction::Back => screen = Screen::Home,
+                MenuAction::None => {}
+            }
+            if cfg_changed {
+                link.set_config(cfg);
+            }
+            let laser_ready = laser_on && laser_ray.is_some() && laser.fill(&gpu).is_ok();
+            menu_quad = Some(menu.quad(&xr.space, alpha_mode));
+            laser_quad = match (laser_ready, laser_ray, hmd) {
+                (true, Some((aim, t)), Some(h)) => Some(laser.quad(&xr.space, &aim, t, &h)),
+                _ => None,
+            };
         }
 
-        let laser_ready = laser_on && laser_ray.is_some() && laser.fill(&gpu).is_ok();
-        let menu_quad = menu.quad(&xr.space, alpha_mode);
-        let laser_quad = match (laser_ready, laser_ray, hmd) {
-            (true, Some((aim, t)), Some(h)) => Some(laser.quad(&xr.space, &aim, t, &h)),
-            _ => None,
-        };
+        // The cancelable sleep countdown, shown centered in front of the user.
+        let mut cd_quad = None;
+        if let (Some(secs), Some(h)) = (countdown_secs, hmd) {
+            countdown.pose = front_pose(&h, 1.0, 0.0);
+            countdown.render(&gpu, alpha_mode, None, |ctx| {
+                build_countdown(ctx, secs, panel_alpha);
+            })?;
+            cd_quad = Some(countdown.quad(&xr.space, alpha_mode));
+        }
+
         let mut layers: Vec<&xr::CompositionLayerBase<xr::Vulkan>> = Vec::new();
-        layers.push(&menu_quad);
+        if let Some(q) = &menu_quad {
+            layers.push(q);
+        }
         if let Some(q) = &laser_quad {
             layers.push(q);
         }
+        if let Some(q) = &cd_quad {
+            layers.push(q);
+        }
         xr.frame_stream.end(time, xr.blend_mode, &layers)?;
+    }
+}
+
+/// Is "now" inside the detection window? Always-on or unset times => always true.
+fn within_window(det: &Detection) -> bool {
+    if det.always || det.start.is_empty() || det.end.is_empty() {
+        return true;
+    }
+    let parse = |s: &str| -> Option<chrono::NaiveTime> {
+        let mut it = s.split(':');
+        let h: u32 = it.next()?.trim().parse().ok()?;
+        let m: u32 = it.next()?.trim().parse().ok()?;
+        chrono::NaiveTime::from_hms_opt(h, m, 0)
+    };
+    let (Some(start), Some(end)) = (parse(&det.start), parse(&det.end)) else {
+        return true;
+    };
+    let now = chrono::Local::now().time();
+    if start <= end {
+        now >= start && now < end
+    } else {
+        // Window crosses midnight (e.g. 23:00 -> 07:00).
+        now >= start || now < end
     }
 }

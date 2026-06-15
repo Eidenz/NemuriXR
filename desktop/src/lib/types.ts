@@ -3,6 +3,7 @@
 export type ListMode = "whitelist" | "blacklist";
 export type VrcStatus = "join_me" | "active" | "ask_me" | "busy";
 export type SleepPhase = "awake" | "prepare" | "sleep";
+export type Sensitivity = "low" | "medium" | "high";
 
 export interface BrightnessLevel {
   brightness: number; // 0-100
@@ -19,6 +20,12 @@ export interface SleepConfig {
   schedule_enabled: boolean;
   sleep_at: string; // "HH:MM"
   wake_at: string;
+  detection_enabled: boolean;
+  detection_always: boolean;
+  detect_start: string; // "HH:MM"
+  detect_end: string; // "HH:MM"
+  detection_sensitivity: Sensitivity;
+  detection_minutes: number;
 }
 export interface AutoAcceptConfig {
   enabled: boolean;

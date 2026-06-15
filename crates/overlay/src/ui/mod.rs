@@ -3,4 +3,4 @@
 // and per-feature screens filled in across milestones.
 pub mod quickmenu;
 
-pub use quickmenu::{build_menu, MenuAction, Screen};
+pub use quickmenu::{build_countdown, build_menu, MenuAction, Screen};

@@ -44,6 +44,7 @@ pub struct Input {
     select: xr::Action<f32>,
     grab: xr::Action<f32>,
     a_button: xr::Action<bool>,
+    b_button: xr::Action<bool>,
     haptic: xr::Action<xr::Haptic>,
     aim_left: xr::Space,
     aim_right: xr::Space,
@@ -67,7 +68,10 @@ impl Input {
         let grip = action_set.create_action::<xr::Posef>("grippose", "Grip pose", &[left_path, right_path])?;
         let select = action_set.create_action::<f32>("select", "Select", &[left_path, right_path])?;
         let grab = action_set.create_action::<f32>("grab", "Grab", &[left_path, right_path])?;
-        let a_button = action_set.create_action::<bool>("abutton", "A button (show/hide)", &[right_path])?;
+        // A toggles the menu (right hand). A/B on either hand also cancel sleep
+        // detection — so both are bound on both hands.
+        let a_button = action_set.create_action::<bool>("abutton", "A button (show/hide)", &[left_path, right_path])?;
+        let b_button = action_set.create_action::<bool>("bbutton", "B button (cancel)", &[left_path, right_path])?;
         let haptic = action_set.create_action::<xr::Haptic>("haptic", "Haptic tick", &[left_path, right_path])?;
         let index_profile = instance.string_to_path("/interaction_profiles/valve/index_controller")?;
         instance.suggest_interaction_profile_bindings(
@@ -81,7 +85,10 @@ impl Input {
                 xr::Binding::new(&select, instance.string_to_path("/user/hand/right/input/trigger/value")?),
                 xr::Binding::new(&grab, instance.string_to_path("/user/hand/left/input/squeeze/force")?),
                 xr::Binding::new(&grab, instance.string_to_path("/user/hand/right/input/squeeze/force")?),
+                xr::Binding::new(&a_button, instance.string_to_path("/user/hand/left/input/a/click")?),
                 xr::Binding::new(&a_button, instance.string_to_path("/user/hand/right/input/a/click")?),
+                xr::Binding::new(&b_button, instance.string_to_path("/user/hand/left/input/b/click")?),
+                xr::Binding::new(&b_button, instance.string_to_path("/user/hand/right/input/b/click")?),
                 xr::Binding::new(&haptic, instance.string_to_path("/user/hand/left/output/haptic")?),
                 xr::Binding::new(&haptic, instance.string_to_path("/user/hand/right/output/haptic")?),
             ],
@@ -98,6 +105,7 @@ impl Input {
             select,
             grab,
             a_button,
+            b_button,
             haptic,
             aim_left,
             aim_right,
@@ -149,6 +157,26 @@ impl Input {
         }
         self.btn_prev = down;
         Ok(toggled)
+    }
+
+    /// Any deliberate controller input this frame — used to cancel sleep
+    /// detection. Deliberately excludes grip: it's easily squeezed while dozing
+    /// off with controllers in hand. Trigger / A / B on either hand only.
+    pub fn any_input(&self, session: &xr::Session<xr::Vulkan>) -> Result<bool> {
+        for path in [self.left_path, self.right_path] {
+            if self.select.state(session, path)?.current_state > 0.15 {
+                return Ok(true);
+            }
+            let a = self.a_button.state(session, path)?;
+            if a.is_active && a.current_state {
+                return Ok(true);
+            }
+            let b = self.b_button.state(session, path)?;
+            if b.is_active && b.current_state {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// A short haptic tick on the given hand (ignored if the controller is absent).

@@ -51,6 +51,25 @@ pub fn build_menu(
     action
 }
 
+/// The cancelable auto-sleep countdown, shown when stillness is detected. Any
+/// head movement or controller input cancels it (handled by the caller).
+pub fn build_countdown(ctx: &egui::Context, secs: u32, alpha: u8) {
+    egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| {
+        theme::panel_card(ui, alpha, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(icons::MOON_STARS).size(48.0).color(theme::SLEEP));
+                ui.add_space(2.0);
+                ui.label(egui::RichText::new("Going to sleep").size(22.0).strong().color(Color32::WHITE));
+                ui.add_space(2.0);
+                ui.label(egui::RichText::new(format!("{secs}")).size(74.0).strong().color(theme::SLEEP));
+                ui.label(egui::RichText::new("Move or press a button to stay awake").size(14.0).color(theme::ON_SURFACE_VAR));
+                ui.add_space(4.0);
+            });
+        });
+    });
+}
+
 /// A warning strip shown when the desktop engine isn't running.
 fn offline_banner(ui: &mut egui::Ui) {
     egui::Frame::default()
@@ -110,6 +129,7 @@ fn automations(ui: &mut egui::Ui, cfg: &mut Config, changed: &mut bool, action: 
     ui.add_space(10.0);
 
     *changed |= toggle_row(ui, icons::MOON, "Sleep Schedule", "Enable/disable at set times", &mut cfg.sleep.schedule_enabled);
+    *changed |= toggle_row(ui, icons::PERSON_SIMPLE_TAI_CHI, "Sleep Detection", "Sleep when you stay still", &mut cfg.sleep.detection_enabled);
     *changed |= toggle_row(ui, icons::SUN, "Brightness on Sleep/Wake", "Dim the headset when you sleep", &mut cfg.brightness.enabled);
     *changed |= toggle_row(ui, icons::ENVELOPE, "Auto-Accept Invites", "Accept invite requests automatically", &mut cfg.vrchat.auto_accept.enabled);
     *changed |= toggle_row(ui, icons::BELL, "Join Notifications", "Sound when players come and go", &mut cfg.vrchat.join_notifications.enabled);
