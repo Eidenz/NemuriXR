@@ -3,6 +3,7 @@
   import { testSound } from "$lib/api";
   import GlassCard from "$lib/components/GlassCard.svelte";
   import Toggle from "$lib/components/Toggle.svelte";
+  import VrchatAccount from "$lib/components/VrchatAccount.svelte";
 
   const players = $derived(app.state?.player_count ?? 0);
   const world = $derived(app.state?.vrchat_world ?? null);
@@ -49,10 +50,12 @@
       </div>
     </GlassCard>
 
+    <VrchatAccount />
+
     <GlassCard title="Auto-Accept Invites & Status Automations">
       <p class="soon">
-        Coming in a later update — these need a VRChat login. The toggles are already in the in-headset menu and persist
-        here; the engine that acts on them is next.
+        Sign in above to enable these. The on/off toggles already live in the in-headset menu and persist here; the
+        engine that acts on them (auto-accepting invite requests, switching status by player count) is the next step.
       </p>
     </GlassCard>
   </div>

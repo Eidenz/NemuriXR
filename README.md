@@ -50,7 +50,9 @@ automation engines themselves are the next milestones.
    delays; VRChat's OSC port found via OSCQuery (mDNS), manual host/port fallback.
 7. ✅ **Sleep schedule** — enters/leaves sleep mode at set times (edge-triggered,
    so a manual toggle still overrides until the next scheduled time).
-8. ⏳ **VRChat API** — auto-accept invites + status automations (needs login).
+8. 🔨 **VRChat API** — secure login done (username/password + 2FA; the session
+   token is kept in the **OS keyring**, password never stored). Auto-accept
+   invites + status automations (pipeline websocket) are the next step.
 9. ⏳ **Motion-based sleep detection** (a later version).
 
 ## Layout

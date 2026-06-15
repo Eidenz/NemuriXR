@@ -74,6 +74,16 @@ export interface Config {
   osc: OscConfig;
 }
 
+export type LoginOutcome =
+  | { kind: "logged_in"; username: string }
+  | { kind: "needs_2fa"; methods: string[] }
+  | { kind: "failed"; message: string };
+
+export interface LoginStatus {
+  logged_in: boolean;
+  username: string | null;
+}
+
 export interface State {
   sleep_phase: SleepPhase;
   player_count: number;

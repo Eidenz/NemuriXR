@@ -23,6 +23,9 @@ mod osc;
 mod schedule;
 mod sound;
 mod vrchat;
+mod vrchat_api;
+
+use vrchat_api::{Api, LoginOutcome, LoginStatus, SharedApi};
 
 /// The in-process engine. Owns the source-of-truth config + live state.
 pub(crate) struct Engine {
@@ -221,6 +224,30 @@ fn test_sound(engine: tauri::State<Shared>, kind: String) {
     sound::play_notification(if kind == "leave" { "leave" } else { "join" }, &custom);
 }
 
+// --- VRChat account (auth) ---
+
+#[tauri::command]
+fn vrchat_login(vrc: tauri::State<SharedApi>, username: String, password: String) -> LoginOutcome {
+    vrc.lock().unwrap().login(&username, &password)
+}
+
+#[tauri::command]
+fn vrchat_verify_2fa(vrc: tauri::State<SharedApi>, method: String, code: String) -> LoginOutcome {
+    vrc.lock().unwrap().verify_2fa(&method, &code)
+}
+
+#[tauri::command]
+fn vrchat_logout(vrc: tauri::State<SharedApi>) -> LoginStatus {
+    let mut a = vrc.lock().unwrap();
+    a.logout();
+    a.login_status()
+}
+
+#[tauri::command]
+fn vrchat_status(vrc: tauri::State<SharedApi>) -> LoginStatus {
+    vrc.lock().unwrap().login_status()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -233,6 +260,13 @@ pub fn run() {
     osc::spawn_discovery(engine.clone());
     // Time-based sleep schedule.
     schedule::spawn(engine.clone());
+
+    // VRChat account: validate any restored session in the background.
+    let vrc: SharedApi = Arc::new(Mutex::new(Api::new()));
+    {
+        let v = vrc.clone();
+        std::thread::spawn(move || v.lock().unwrap().restore());
+    }
 
     // IPC server for the VR overlay (reads state, sends sleep/config commands).
     {
@@ -260,6 +294,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(engine)
+        .manage(vrc)
         .invoke_handler(tauri::generate_handler![
             get_config,
             set_config,
@@ -267,7 +302,11 @@ pub fn run() {
             set_phase,
             apply_brightness,
             send_osc,
-            test_sound
+            test_sound,
+            vrchat_login,
+            vrchat_verify_2fa,
+            vrchat_logout,
+            vrchat_status
         ])
         .setup(|app| {
             // System tray: left-click opens the window; the menu has Open + Quit.

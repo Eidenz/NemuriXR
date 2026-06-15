@@ -35,7 +35,7 @@
           <div class="sliders">
             <Slider label="Brightness" suffix="%" bind:value={lvl.brightness} onchange={saveSoon} />
             <Slider label="Fan speed" suffix="%" disabled={!beyond} bind:value={lvl.fan} onchange={saveSoon} />
-            <Slider label="Fade time" suffix="s" max={120} bind:value={lvl.transition_seconds} onchange={saveSoon} />
+            <Slider label="Fade time" suffix="s" max={120} editable bind:value={lvl.transition_seconds} onchange={saveSoon} />
           </div>
           <button class="btn tonal state-layer preview" onclick={() => applyBrightness(c.key)}>Preview on headset</button>
         </GlassCard>
