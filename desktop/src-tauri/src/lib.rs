@@ -253,10 +253,15 @@ fn vrchat_status(vrc: tauri::State<SharedApi>) -> LoginStatus {
     vrc.lock().unwrap().login_status()
 }
 
-/// Friends list for the auto-accept whitelist picker.
+/// Friends list for the auto-accept whitelist picker. Grabs the client + cookie
+/// under a brief lock, then fetches all pages without holding it.
 #[tauri::command]
 fn vrchat_friends(vrc: tauri::State<SharedApi>) -> Vec<Friend> {
-    vrc.lock().unwrap().get_friends()
+    let req = vrc.lock().unwrap().friends_request();
+    match req {
+        Some((client, cookie)) => vrchat_api::fetch_friends(&client, &cookie),
+        None => Vec::new(),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

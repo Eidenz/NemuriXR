@@ -14,13 +14,16 @@ use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::sound;
 use crate::Engine;
 
 const POLL: Duration = Duration::from_millis(1500);
 const JOIN_GRACE: Duration = Duration::from_secs(15);
+// If the log hasn't been written for this long, VRChat is closed/idle — stop
+// reporting a stale world.
+const STALE: Duration = Duration::from_secs(120);
 
 pub fn spawn(engine: Arc<Mutex<Engine>>) {
     std::thread::spawn(move || watch_loop(engine));
@@ -190,9 +193,24 @@ fn watch_loop(engine: Arc<Mutex<Engine>>) {
         }
         if let Some(path) = current.clone() {
             read_new(&path, &mut offset, &mut w, &engine);
+            // VRChat closed (or a stale log from a previous session): if the file
+            // hasn't changed in a while, we're not actually in a world.
+            if w.world.is_some() && log_is_stale(&path) {
+                w.world = None;
+                w.instance = None;
+                w.players.clear();
+                log::info!("VRChat log idle for {STALE:?}; treating as not in a world");
+            }
             publish(&engine, &w);
         }
         std::thread::sleep(POLL);
+    }
+}
+
+fn log_is_stale(path: &Path) -> bool {
+    match std::fs::metadata(path).and_then(|m| m.modified()) {
+        Ok(mtime) => SystemTime::now().duration_since(mtime).map(|age| age > STALE).unwrap_or(false),
+        Err(_) => true,
     }
 }
 

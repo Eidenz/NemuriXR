@@ -13,14 +13,14 @@
         <div class="txt"><span class="t">Enable</span></div>
         <Toggle bind:checked={n.enabled} label="Join notifications" onchange={save} />
       </div>
-      <div class="row" class:dim={!n.enabled}>
+      <div class="row">
         <div class="txt">
           <span class="t">Only when previously alone</span>
           <span class="d">Only notify if you were alone before the player joined / are alone after they left</span>
         </div>
         <Toggle bind:checked={n.only_when_alone} label="Only when alone" onchange={save} />
       </div>
-      <div class="row" class:dim={!n.enabled}>
+      <div class="row">
         <div class="txt"><span class="t">Only when sleep mode is enabled</span></div>
         <Toggle bind:checked={n.only_when_sleep} label="Only when sleeping" onchange={save} />
       </div>
@@ -50,10 +50,6 @@
   }
   .row:first-child {
     border-top: none;
-  }
-  .row.dim {
-    opacity: 0.4;
-    pointer-events: none;
   }
   .txt {
     display: flex;

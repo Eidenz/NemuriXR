@@ -170,31 +170,15 @@ impl Api {
         }
     }
 
-    /// Friends list (online + offline, up to 100 each) for the whitelist picker.
-    pub fn get_friends(&mut self) -> Vec<Friend> {
-        if self.auth_cookie.is_none() {
-            return Vec::new();
+    /// Grab the bits needed to fetch friends so the (multi-page) network calls
+    /// can run WITHOUT holding the Api lock — otherwise the 1 s status poll stalls
+    /// behind the whole fetch. Returns None if logged out / rate-limited.
+    pub fn friends_request(&mut self) -> Option<(Client, String)> {
+        self.auth_cookie.as_ref()?;
+        if !self.limiter.allow("friends", 15) {
+            return None;
         }
-        let mut out: Vec<Friend> = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for offline in [false, true] {
-            if !self.limiter.allow("friends", 15) {
-                break;
-            }
-            let url = format!("{API}/auth/user/friends?n=100&offset=0&offline={offline}");
-            let Ok(resp) = self.client.get(url).header("Cookie", self.cookie_header()).send() else { continue };
-            self.capture_cookies(&resp);
-            let Ok(arr) = resp.json::<Vec<Value>>() else { continue };
-            for f in arr {
-                if let (Some(id), Some(name)) = (f.get("id").and_then(Value::as_str), f.get("displayName").and_then(Value::as_str)) {
-                    if seen.insert(id.to_string()) {
-                        out.push(Friend { id: id.to_string(), display_name: name.to_string() });
-                    }
-                }
-            }
-        }
-        out.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
-        out
+        Some((self.client.clone(), self.cookie_header()))
     }
 
     pub fn login_status(&self) -> LoginStatus {
@@ -358,6 +342,41 @@ impl Api {
 
 fn net_error(e: reqwest::Error) -> String {
     format!("Network error: {e}")
+}
+
+/// Fetch the full friends list — every page of both the online and offline
+/// buckets (VRChat caps each page at n=100). Runs lock-free with a pre-grabbed
+/// client + cookie (see `Api::friends_request`).
+pub fn fetch_friends(client: &Client, cookie: &str) -> Vec<Friend> {
+    let mut out: Vec<Friend> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for offline in [false, true] {
+        let mut offset = 0;
+        loop {
+            let url = format!("{API}/auth/user/friends?n=100&offset={offset}&offline={offline}");
+            let Ok(resp) = client.get(url).header("Cookie", cookie).send() else { break };
+            let Ok(arr) = resp.json::<Vec<Value>>() else { break };
+            let n = arr.len();
+            for f in arr {
+                if let (Some(id), Some(name)) =
+                    (f.get("id").and_then(Value::as_str), f.get("displayName").and_then(Value::as_str))
+                {
+                    if seen.insert(id.to_string()) {
+                        out.push(Friend { id: id.to_string(), display_name: name.to_string() });
+                    }
+                }
+            }
+            if n < 100 {
+                break; // last page
+            }
+            offset += 100;
+            if offset >= 5000 {
+                break; // safety cap
+            }
+        }
+    }
+    out.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+    out
 }
 
 // Wrap keyring so a missing/locked Secret Service degrades gracefully (the

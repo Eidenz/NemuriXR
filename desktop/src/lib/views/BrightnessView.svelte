@@ -28,7 +28,7 @@
       <Toggle bind:checked={app.config.brightness.enabled} label="Brightness automations" onchange={save} />
     </div>
 
-    <div class="grid" class:off={!app.config.brightness.enabled}>
+    <div class="grid">
       {#each cards as c (c.key)}
         {@const lvl = c.level()}
         <GlassCard title={c.title}>
@@ -80,10 +80,6 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 18px;
     transition: opacity 0.2s var(--ease);
-  }
-  .grid.off {
-    opacity: 0.45;
-    pointer-events: none;
   }
   .sliders {
     display: flex;

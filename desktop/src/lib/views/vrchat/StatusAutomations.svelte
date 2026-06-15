@@ -26,25 +26,25 @@
         <Toggle bind:checked={sa.enabled} label="Status automations" onchange={save} />
       </div>
 
-      <div class="row slider" class:dim={!sa.enabled}>
+      <div class="row slider">
         <Slider label="Player limit (includes you)" min={1} max={40} editable bind:value={sa.player_limit} onchange={saveSoon} />
       </div>
 
-      <div class="row" class:dim={!sa.enabled}>
+      <div class="row">
         <div class="txt"><span class="t">Below the limit</span><span class="d">Status when there's room</span></div>
         <select bind:value={sa.below_status} onchange={save}>
           {#each statuses as s (s.v)}<option value={s.v}>{s.l}</option>{/each}
         </select>
       </div>
 
-      <div class="row" class:dim={!sa.enabled}>
+      <div class="row">
         <div class="txt"><span class="t">At the limit or above</span><span class="d">Status when it's full</span></div>
         <select bind:value={sa.at_or_above_status} onchange={save}>
           {#each statuses as s (s.v)}<option value={s.v}>{s.l}</option>{/each}
         </select>
       </div>
 
-      <div class="row" class:dim={!sa.enabled}>
+      <div class="row">
         <div class="txt"><span class="t">Only when sleep mode is enabled</span></div>
         <Toggle bind:checked={sa.only_when_sleep} label="Only when sleeping" onchange={save} />
       </div>
@@ -79,10 +79,6 @@
   }
   .row.slider {
     display: block;
-  }
-  .row.dim {
-    opacity: 0.4;
-    pointer-events: none;
   }
   .txt {
     display: flex;

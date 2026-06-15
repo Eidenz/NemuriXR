@@ -1,19 +1,33 @@
 // Shared reactive state (Svelte 5 runes). Polls the overlay/core over the Tauri
 // IPC bridge; edits flow back via `save()` (debounced).
-import { getConfig, setConfig, getState, setPhase, vrchatStatus } from "./api";
-import type { Config, LoginStatus, SleepPhase, State } from "./types";
+import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends } from "./api";
+import type { Config, Friend, LoginStatus, SleepPhase, State } from "./types";
 
 export const app = $state<{
   config: Config | null;
   state: State | null;
   connected: boolean;
   vrchatLogin: LoginStatus;
+  vrchatFriends: Friend[];
 }>({
   config: null,
   state: null,
   connected: false,
   vrchatLogin: { logged_in: false, username: null },
+  vrchatFriends: [],
 });
+
+let friendsLoaded = false;
+/** Fetch the friends list once (cached across tab switches); `force` re-fetches. */
+export async function loadVrchatFriends(force = false) {
+  if (!force && (friendsLoaded || app.vrchatFriends.length > 0)) return;
+  try {
+    app.vrchatFriends = await vrchatFriends();
+    friendsLoaded = true;
+  } catch (e) {
+    console.error("vrchatFriends failed", e);
+  }
+}
 
 export async function loadVrchatLogin() {
   try {
