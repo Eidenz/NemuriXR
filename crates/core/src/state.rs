@@ -39,6 +39,12 @@ pub struct State {
     pub osc_target: Option<String>,
     /// The audio output device last controlled by an automation (for the UI).
     pub audio_target: Option<String>,
+    /// Latest transient notice text (auto-accept, status change, …) for the
+    /// in-headset toast. Paired with `notice_seq` so the overlay only shows each
+    /// notice once.
+    pub notice: Option<String>,
+    /// Bumped every time `notice` is set; the overlay toasts when it changes.
+    pub notice_seq: u64,
     /// True while the in-headset overlay/core is running and serving IPC.
     pub overlay_running: bool,
 }

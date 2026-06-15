@@ -84,10 +84,12 @@ fn handle_message(text: &str, engine: &Arc<Mutex<Engine>>, api: &SharedApi) {
     else {
         return;
     };
-    maybe_accept(engine, api, id, sender);
+    // Friendlier than the user id when VRChat includes it.
+    let name = notif.get("senderUsername").and_then(Value::as_str).unwrap_or(sender);
+    maybe_accept(engine, api, id, sender, name);
 }
 
-fn maybe_accept(engine: &Arc<Mutex<Engine>>, api: &SharedApi, notif_id: &str, sender: &str) {
+fn maybe_accept(engine: &Arc<Mutex<Engine>>, api: &SharedApi, notif_id: &str, sender: &str, sender_name: &str) {
     // Evaluate conditions against a quick snapshot, then drop the engine lock
     // before any network call.
     enum Action {
@@ -129,21 +131,33 @@ fn maybe_accept(engine: &Arc<Mutex<Engine>>, api: &SharedApi, notif_id: &str, se
         }
     };
 
-    let mut a = api.lock().unwrap();
-    match action {
-        Action::Accept { instance, message_slot } => {
-            if a.invite_user(sender, &instance, message_slot) {
-                a.hide_notification(notif_id);
-                log::info!("auto-accepted invite request from {sender}");
+    // Do the network action, then drop the api lock before touching the engine.
+    let notice = {
+        let mut a = api.lock().unwrap();
+        match action {
+            Action::Accept { instance, message_slot } => {
+                if a.invite_user(sender, &instance, message_slot) {
+                    a.hide_notification(notif_id);
+                    log::info!("auto-accepted invite request from {sender}");
+                    Some(format!("Accepted invite from {sender_name}"))
+                } else {
+                    None
+                }
             }
-        }
-        Action::Decline { slot } => {
-            if a.respond_invite(notif_id, slot) {
-                a.hide_notification(notif_id);
-                log::info!("declined invite request from {sender} with a message");
+            Action::Decline { slot } => {
+                if a.respond_invite(notif_id, slot) {
+                    a.hide_notification(notif_id);
+                    log::info!("declined invite request from {sender} with a message");
+                    Some(format!("Declined invite from {sender_name}"))
+                } else {
+                    None
+                }
             }
+            Action::Ignore => None,
         }
-        Action::Ignore => {}
+    };
+    if let Some(msg) = notice {
+        engine.lock().unwrap().notify(msg);
     }
 }
 
@@ -181,8 +195,10 @@ fn spawn_status_automation(engine: Arc<Mutex<Engine>>, api: SharedApi) {
                     if prev_above != Some(above) {
                         prev_above = Some(above);
                         let status = vrc_status_str(if above { at_or_above } else { below });
-                        if api.lock().unwrap().set_status(status) {
+                        let ok = api.lock().unwrap().set_status(status);
+                        if ok {
                             log::info!("status automation -> {status}");
+                            engine.lock().unwrap().notify(format!("Status → {status}"));
                         }
                     }
                 }

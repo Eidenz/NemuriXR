@@ -78,6 +78,24 @@ pub fn build_countdown(ctx: &egui::Context, secs: u32, alpha: u8) {
     });
 }
 
+/// A small transient toast for engine events (auto-accepted invites, status
+/// changes…). `alpha` is the (possibly faded) panel opacity.
+pub fn build_toast(ctx: &egui::Context, text: &str, alpha: u8) {
+    let accent = theme::SLEEP;
+    let icon_col = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), alpha);
+    let text_col = Color32::from_white_alpha(alpha);
+    egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| {
+        theme::panel_card(ui, alpha, |ui| {
+            ui.horizontal(|ui| {
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(icons::BELL).size(26.0).color(icon_col));
+                ui.add_space(10.0);
+                ui.label(egui::RichText::new(text).size(20.0).color(text_col));
+            });
+        });
+    });
+}
+
 /// A warning strip shown when the desktop engine isn't running.
 fn offline_banner(ui: &mut egui::Ui) {
     egui::Frame::default()

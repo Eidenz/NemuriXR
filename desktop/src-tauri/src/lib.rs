@@ -207,6 +207,12 @@ impl Engine {
         self.run_command(SleepPhase::Awake);
     }
 
+    /// Push a transient notice for the in-headset toast (auto-accept, status…).
+    pub(crate) fn notify(&mut self, text: impl Into<String>) {
+        self.state.notice = Some(text.into());
+        self.state.notice_seq = self.state.notice_seq.wrapping_add(1);
+    }
+
     /// A state snapshot with the derived `overlay_running` flag filled in.
     fn snapshot(&self) -> State {
         let mut s = self.state.clone();

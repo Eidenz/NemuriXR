@@ -31,11 +31,15 @@ use detector::{nearest_pose_deg, Detector, Tick};
 use mathx::{gravity_local, locate_pose};
 use nemurixr_core::SleepPhase;
 use overlay::{front_pose, posef, Input, Laser, Panel, TargetId};
-use ui::{build_countdown, build_menu, MenuAction, Screen};
+use ui::{build_countdown, build_menu, build_toast, MenuAction, Screen};
 
 const MENU: TargetId = 0;
 /// Delay between pressing "Capture a pose" and recording it — time to settle in.
 const CALIB_DELAY: Duration = Duration::from_secs(5);
+/// How long an event toast stays on screen.
+const TOAST_SHOW: Duration = Duration::from_secs(4);
+/// Toast fade-out duration at the end.
+const TOAST_FADE: f32 = 0.6;
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -90,6 +94,12 @@ fn run() -> Result<()> {
     let cd_w = 0.42f32;
     let mut countdown = Panel::new(&gpu, &xr.session, cd_px, (cd_w, cd_w * cd_px.1 as f32 / cd_px.0 as f32), posef([0.0, 0.0, -1.0]))?;
 
+    // Transient event toasts (auto-accept, status changes…), shown above center.
+    let toast_px = (760u32, 150u32);
+    let toast_w = 0.46f32;
+    let mut toast_panel =
+        Panel::new(&gpu, &xr.session, toast_px, (toast_w, toast_w * toast_px.1 as f32 / toast_px.0 as f32), posef([0.0, 0.0, -1.0]))?;
+
     // The link to the desktop-hosted engine (background thread; never blocks us).
     let link = EngineLink::spawn();
 
@@ -97,6 +107,9 @@ fn run() -> Result<()> {
     let mut screen = Screen::Home;
     // When set, a sleep-pose capture is counting down to this instant.
     let mut capture_at: Option<Instant> = None;
+    // Event-toast state: the last notice seq we've shown, and the active toast.
+    let mut last_notice_seq: Option<u64> = None;
+    let mut toast: Option<(String, Instant)> = None;
 
     log::info!("NemuriXR overlay ready. Double-tap A (right) to open the menu; point to interact, grip to move it.");
 
@@ -145,6 +158,21 @@ fn run() -> Result<()> {
         let engine_state = link.state();
         let connected = link.connected();
         let phase = engine_state.sleep_phase;
+
+        // Event toasts: show a new notice once (ignore any that predate launch).
+        match last_notice_seq {
+            None => last_notice_seq = Some(engine_state.notice_seq),
+            Some(prev) if prev != engine_state.notice_seq => {
+                last_notice_seq = Some(engine_state.notice_seq);
+                if let Some(text) = engine_state.notice.clone() {
+                    toast = Some((text, Instant::now() + TOAST_SHOW));
+                }
+            }
+            _ => {}
+        }
+        if toast.as_ref().is_some_and(|(_, until)| Instant::now() >= *until) {
+            toast = None;
+        }
 
         // Input: toggle the menu, then point/grab it.
         let mut ptr: Option<(f32, f32, bool)> = None;
@@ -287,6 +315,22 @@ fn run() -> Result<()> {
             cd_quad = Some(countdown.quad(&xr.space, alpha_mode));
         }
 
+        // Event toast, slightly above center, fading out at the end.
+        let mut toast_quad = None;
+        if let (Some((text, until)), Some(h)) = (&toast, hmd) {
+            let remaining = until.saturating_duration_since(Instant::now()).as_secs_f32();
+            let fade = (remaining / TOAST_FADE).clamp(0.0, 1.0);
+            let a = (panel_alpha as f32 * fade) as u8;
+            let mut pose = front_pose(&h, 1.3, 0.0);
+            pose.position.y += 0.30;
+            toast_panel.pose = pose;
+            let text = text.clone();
+            toast_panel.render(&gpu, alpha_mode, None, |ctx| {
+                build_toast(ctx, &text, a);
+            })?;
+            toast_quad = Some(toast_panel.quad(&xr.space, alpha_mode));
+        }
+
         let mut layers: Vec<&xr::CompositionLayerBase<xr::Vulkan>> = Vec::new();
         if let Some(q) = &menu_quad {
             layers.push(q);
@@ -295,6 +339,9 @@ fn run() -> Result<()> {
             layers.push(q);
         }
         if let Some(q) = &cd_quad {
+            layers.push(q);
+        }
+        if let Some(q) = &toast_quad {
             layers.push(q);
         }
         xr.frame_stream.end(time, xr.blend_mode, &layers)?;
