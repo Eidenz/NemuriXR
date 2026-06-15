@@ -179,8 +179,8 @@ fn wide_button(ui: &mut egui::Ui, icon: &str, label: &str, active: bool) -> bool
 /// Returns true if the value changed this frame.
 fn toggle_row(ui: &mut egui::Ui, icon: &str, title: &str, subtitle: &str, value: &mut bool) -> bool {
     let w = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 64.0), Sense::click());
-    ui.add_space(8.0); // gap to the next row
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 58.0), Sense::click());
+    ui.add_space(6.0); // gap to the next row
     let fill = if resp.hovered() { Color32::from_rgb(48, 47, 56) } else { theme::SURFACE_CONTAINER };
     let p = ui.painter();
     p.rect_filled(rect, egui::CornerRadius::same(14), fill);

@@ -68,6 +68,7 @@ export interface OscConfig {
 }
 export interface Config {
   block_game_input: boolean;
+  auto_launch_overlay: boolean;
   sleep: SleepConfig;
   brightness: BrightnessConfig;
   vrchat: VrchatConfig;

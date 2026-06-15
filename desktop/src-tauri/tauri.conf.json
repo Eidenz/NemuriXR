@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.eidenz.nemurixr",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm stage-overlay:debug && pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm build && pnpm stage-overlay:release",
     "frontendDist": "../build"
   },
   "app": {
@@ -29,7 +29,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["deb", "rpm", "appimage"],
+    "externalBin": ["binaries/nemurixr-overlay"],
+    "category": "Utility",
+    "shortDescription": "VR sleeping utility for Monado",
+    "longDescription": "NemuriXR — an in-headset and desktop sleeping utility for VR on Linux/Monado: brightness & fan control, sleep schedule, VRChat join/leave notifications, auto-accept invites + status automations, and OSC.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

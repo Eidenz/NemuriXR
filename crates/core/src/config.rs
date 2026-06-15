@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     /// Suppress game controller input while pointing at overlay panels.
     pub block_game_input: bool,
+    /// Auto-launch the in-headset overlay when a Monado VR session starts.
+    pub auto_launch_overlay: bool,
     pub sleep: SleepConfig,
     pub brightness: BrightnessConfig,
     pub vrchat: VrchatConfig,
@@ -238,6 +240,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             block_game_input: true,
+            auto_launch_overlay: true,
             sleep: SleepConfig::default(),
             brightness: BrightnessConfig::default(),
             vrchat: VrchatConfig::default(),

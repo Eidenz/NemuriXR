@@ -8,6 +8,7 @@ export const setPhase = (phase: SleepPhase) => invoke("set_phase", { phase });
 export const testSound = (kind: "join" | "leave") => invoke("test_sound", { kind });
 export const applyBrightness = (which: SleepPhase) => invoke("apply_brightness", { which });
 export const sendOsc = (which: SleepPhase) => invoke("send_osc", { which });
+export const launchOverlay = () => invoke<boolean>("launch_overlay");
 
 // VRChat account
 export const vrchatStatus = () => invoke<LoginStatus>("vrchat_status");

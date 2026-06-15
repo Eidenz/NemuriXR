@@ -39,7 +39,30 @@ fn main() {
     }
 }
 
+/// Single-instance guard (flock): if another overlay holds the lock, exit. The
+/// returned file must stay alive for the process lifetime to hold the lock.
+fn acquire_singleton() -> Option<std::fs::File> {
+    use std::os::unix::io::AsRawFd;
+    let dir = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
+    let path = format!("{dir}/nemurixr-overlay.lock");
+    let file = std::fs::OpenOptions::new().create(true).write(true).open(&path).ok()?;
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if rc == 0 {
+        Some(file)
+    } else {
+        None
+    }
+}
+
 fn run() -> Result<()> {
+    let _singleton = match acquire_singleton() {
+        Some(f) => f,
+        None => {
+            log::info!("another NemuriXR overlay is already running; exiting");
+            return Ok(());
+        }
+    };
+
     let (mut xr, gpu) = overlay::session::init("NemuriXR")?;
 
     let opacity: f32 = env::var("NEMURI_OPACITY").ok().and_then(|s| s.parse().ok()).unwrap_or(0.92);
@@ -48,7 +71,7 @@ fn run() -> Result<()> {
     let panel_alpha = (opacity.clamp(0.0, 1.0) * 255.0) as u8;
     log::info!("alpha_mode={alpha_mode} opacity={opacity} laser={laser_on}");
 
-    let menu_px = (980u32, 620u32);
+    let menu_px = (980u32, 800u32);
     let menu_w = 0.52f32;
     let mut menu = Panel::new(&gpu, &xr.session, menu_px, (menu_w, menu_w * menu_px.1 as f32 / menu_px.0 as f32), posef([0.0, 0.0, -1.0]))?;
     let mut laser = Laser::new(&gpu, &xr.session)?;
@@ -61,7 +84,7 @@ fn run() -> Result<()> {
     let mut menu_visible = false;
     let mut screen = Screen::Home;
 
-    log::info!("NemuriXR overlay ready. Double-press SYSTEM to open the menu; point to interact, grip to move it.");
+    log::info!("NemuriXR overlay ready. Double-tap A (right) to open the menu; point to interact, grip to move it.");
 
     let mut events = xr::EventDataBuffer::new();
     let mut running = false;
@@ -115,7 +138,7 @@ fn run() -> Result<()> {
         let mut pointing_panel = false;
         if focused {
             input.sync(&xr.session)?;
-            if input.system_double_press(&xr.session)? {
+            if input.a_double_press(&xr.session)? {
                 menu_visible = !menu_visible;
                 input.clear_grab();
                 if menu_visible {

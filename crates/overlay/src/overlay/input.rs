@@ -43,15 +43,15 @@ pub struct Input {
     right_path: xr::Path,
     select: xr::Action<f32>,
     grab: xr::Action<f32>,
-    system: xr::Action<bool>,
+    a_button: xr::Action<bool>,
     haptic: xr::Action<xr::Haptic>,
     aim_left: xr::Space,
     aim_right: xr::Space,
     grip_left: xr::Space,
-    // double-press detection state
-    sys_prev: bool,
-    last_sys_press: Option<Instant>,
-    sys_active_prev: bool,
+    // A-button double-press detection state
+    btn_prev: bool,
+    last_press: Option<Instant>,
+    btn_active_prev: bool,
     last_active_change: Option<Instant>,
     // grab state: (target, hand index, controller→panel relative pose)
     grabbed: Option<(TargetId, usize, xr::Posef)>,
@@ -67,7 +67,7 @@ impl Input {
         let grip = action_set.create_action::<xr::Posef>("grippose", "Grip pose", &[left_path, right_path])?;
         let select = action_set.create_action::<f32>("select", "Select", &[left_path, right_path])?;
         let grab = action_set.create_action::<f32>("grab", "Grab", &[left_path, right_path])?;
-        let system = action_set.create_action::<bool>("system", "System (show/hide)", &[left_path, right_path])?;
+        let a_button = action_set.create_action::<bool>("abutton", "A button (show/hide)", &[right_path])?;
         let haptic = action_set.create_action::<xr::Haptic>("haptic", "Haptic tick", &[left_path, right_path])?;
         let index_profile = instance.string_to_path("/interaction_profiles/valve/index_controller")?;
         instance.suggest_interaction_profile_bindings(
@@ -81,8 +81,7 @@ impl Input {
                 xr::Binding::new(&select, instance.string_to_path("/user/hand/right/input/trigger/value")?),
                 xr::Binding::new(&grab, instance.string_to_path("/user/hand/left/input/squeeze/force")?),
                 xr::Binding::new(&grab, instance.string_to_path("/user/hand/right/input/squeeze/force")?),
-                xr::Binding::new(&system, instance.string_to_path("/user/hand/left/input/system/click")?),
-                xr::Binding::new(&system, instance.string_to_path("/user/hand/right/input/system/click")?),
+                xr::Binding::new(&a_button, instance.string_to_path("/user/hand/right/input/a/click")?),
                 xr::Binding::new(&haptic, instance.string_to_path("/user/hand/left/output/haptic")?),
                 xr::Binding::new(&haptic, instance.string_to_path("/user/hand/right/output/haptic")?),
             ],
@@ -98,14 +97,14 @@ impl Input {
             right_path,
             select,
             grab,
-            system,
+            a_button,
             haptic,
             aim_left,
             aim_right,
             grip_left,
-            sys_prev: false,
-            last_sys_press: None,
-            sys_active_prev: false,
+            btn_prev: false,
+            last_press: None,
+            btn_active_prev: false,
             last_active_change: None,
             grabbed: None,
             prev_click: [false, false],
@@ -126,30 +125,29 @@ impl Input {
         locate_pose(&self.grip_left, space, time)
     }
 
-    /// True on the frame a SYSTEM double-press completes. Ignores edges briefly
-    /// around an action active-state flip (another overlay (un)blocking input
-    /// otherwise fakes a press), and only counts presses from present controllers.
-    pub fn system_double_press(&mut self, session: &xr::Session<xr::Vulkan>) -> Result<bool> {
-        let sl = self.system.state(session, self.left_path)?;
-        let sr = self.system.state(session, self.right_path)?;
-        let sys_active = sl.is_active || sr.is_active;
-        let sys_down = (sl.is_active && sl.current_state) || (sr.is_active && sr.current_state);
-        if sys_active != self.sys_active_prev {
-            self.sys_active_prev = sys_active;
+    /// True on the frame a double-tap of the right controller's A button
+    /// completes. Ignores edges briefly around an action active-state flip (a
+    /// controller waking otherwise fakes a press).
+    pub fn a_double_press(&mut self, session: &xr::Session<xr::Vulkan>) -> Result<bool> {
+        let s = self.a_button.state(session, self.right_path)?;
+        let active = s.is_active;
+        let down = s.is_active && s.current_state;
+        if active != self.btn_active_prev {
+            self.btn_active_prev = active;
             self.last_active_change = Some(Instant::now());
         }
         let settled = self.last_active_change.is_none_or(|t| t.elapsed().as_millis() > 150);
         let mut toggled = false;
-        if sys_down && !self.sys_prev && settled {
+        if down && !self.btn_prev && settled {
             let now = Instant::now();
-            if self.last_sys_press.is_some_and(|t| now.duration_since(t).as_millis() < 400) {
+            if self.last_press.is_some_and(|t| now.duration_since(t).as_millis() < 400) {
                 toggled = true;
-                self.last_sys_press = None;
+                self.last_press = None;
             } else {
-                self.last_sys_press = Some(now);
+                self.last_press = Some(now);
             }
         }
-        self.sys_prev = sys_down;
+        self.btn_prev = down;
         Ok(toggled)
     }
 

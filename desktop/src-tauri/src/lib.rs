@@ -20,11 +20,14 @@ use nemurixr_core::{Config, SleepPhase, State};
 
 mod brightness;
 mod osc;
+mod overlay_launcher;
 mod schedule;
 mod sound;
 mod vrchat;
 mod vrchat_api;
 mod vrchat_feature;
+
+use overlay_launcher::OverlayChild;
 
 use vrchat_api::{Api, Friend, LoginOutcome, LoginStatus, SharedApi};
 
@@ -144,6 +147,10 @@ impl Engine {
 
     pub(crate) fn vrchat_log_dir(&self) -> String {
         self.config.vrchat.log_dir.clone()
+    }
+
+    pub(crate) fn auto_launch_overlay(&self) -> bool {
+        self.config.auto_launch_overlay
     }
 
     pub(crate) fn set_vrchat(&mut self, world: Option<String>, instance: Option<String>, player_count: u32) {
@@ -269,6 +276,12 @@ async fn vrchat_status(vrc: tauri::State<'_, SharedApi>) -> Result<LoginStatus, 
         .map_err(|e| e.to_string())
 }
 
+/// Manually launch the in-headset overlay now.
+#[tauri::command]
+fn launch_overlay(child: tauri::State<OverlayChild>) -> bool {
+    overlay_launcher::launch_now(&child)
+}
+
 /// Friends list for the auto-accept whitelist picker. Async + spawn_blocking so
 /// the multi-page fetch runs off the main thread (no UI freeze); grabs the
 /// client + cookie under a brief lock, then fetches all pages without holding it.
@@ -308,6 +321,10 @@ pub fn run() {
     // VRChat automation engine: pipeline websocket (auto-accept) + status automations.
     vrchat_feature::spawn(engine.clone(), vrc.clone());
 
+    // Auto-launch the in-headset overlay when a Monado session starts.
+    let overlay_child: OverlayChild = Arc::new(Mutex::new(None));
+    overlay_launcher::spawn_watcher(engine.clone(), overlay_child.clone());
+
     // IPC server for the VR overlay (reads state, sends sleep/config commands).
     {
         let e = engine.clone();
@@ -335,6 +352,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(engine)
         .manage(vrc)
+        .manage(overlay_child)
         .invoke_handler(tauri::generate_handler![
             get_config,
             set_config,
@@ -343,6 +361,7 @@ pub fn run() {
             apply_brightness,
             send_osc,
             test_sound,
+            launch_overlay,
             vrchat_login,
             vrchat_verify_2fa,
             vrchat_logout,
@@ -361,7 +380,10 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => show_main(app),
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        overlay_launcher::kill(&app.state::<OverlayChild>());
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {

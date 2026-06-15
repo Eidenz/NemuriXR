@@ -26,3 +26,4 @@ libmonado = { git = "https://github.com/wayvr-org/libmonado-rs.git", rev = "6f66
 
 env_logger = "0.11"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+libc = "0.2"

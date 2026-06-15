@@ -505,6 +505,7 @@ dependencies = [
  "egui-phosphor",
  "env_logger",
  "gpu-allocator",
+ "libc",
  "libmonado",
  "log",
  "nemurixr-core",

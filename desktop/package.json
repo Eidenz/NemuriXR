@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "tauri": "NO_STRIP=true tauri"
+    "tauri": "NO_STRIP=true tauri",
+    "stage-overlay:debug": "bash scripts/stage-overlay.sh debug",
+    "stage-overlay:release": "bash scripts/stage-overlay.sh release"
   },
   "license": "MIT",
   "dependencies": {

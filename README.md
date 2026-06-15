@@ -54,8 +54,10 @@ automation engines themselves are the next milestones.
    password never stored). **Auto-accept invite requests** (whitelist/blacklist +
    max-players + only-when-sleep) over the **pipeline websocket**, and **status
    automations** by player count. Event-driven (no polling) + rate-limited.
-9. ⏳ **Motion-based sleep detection** (a later version).
-10. ⏳ **Packaging** — `tauri build` (AppImage/.deb) + autostart.
+9. ✅ **Packaging + auto-launch** — desktop bundles to deb/rpm/appimage with the
+   overlay as a sidecar; the desktop watches for Monado and auto-launches the
+   overlay (no SteamVR-style manifest exists for OpenXR).
+10. ⏳ **Motion-based sleep detection** (next).
 
 ## Layout
 
@@ -86,17 +88,31 @@ Closing the window hides it to the tray; the engine keeps running. Quit fully fr
 the tray menu. (Linux tray needs a StatusNotifier host — native on KDE; on GNOME
 install the AppIndicator extension and `libappindicator-gtk3`.)
 
-**Overlay** (run with your Monado / Envision VR session active):
+**Overlay:** you normally don't launch this yourself — the desktop app
+**auto-launches it** when a Monado VR session starts (and it exits when VR ends).
+There's also a "Launch VR overlay" button + an auto-launch toggle in Settings →
+General. To run it standalone for development:
 
 ```bash
-cargo build
 cargo run -p nemurixr-overlay
 ```
 
 Requires an OpenXR runtime (Monado) with `XR_KHR_vulkan_enable2` and
-`XR_EXTX_overlay`. Double-press **SYSTEM** to open the quick menu; point + trigger
+`XR_EXTX_overlay`. Double-tap **A** (right controller) to open the quick menu; point + trigger
 to click, grip to move it. It connects to the desktop engine; if the desktop app
 isn't running it shows an offline notice.
+
+## Packaging
+
+```bash
+cd desktop
+pnpm tauri:build      # stages the overlay sidecar, then bundles deb + rpm + appimage
+```
+
+Output: `desktop/src-tauri/target/release/bundle/{deb,rpm,appimage}/`. The overlay
+binary is bundled as a Tauri sidecar so the single package contains both parts.
+On Fedora/Nobara the rpm + AppImage build out of the box; the `.deb` target needs
+`dpkg` (`sudo dnf install dpkg`).
 
 ## Configuration
 
