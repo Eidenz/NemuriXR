@@ -6,6 +6,7 @@
   import StatusView from "$lib/views/StatusView.svelte";
   import BrightnessView from "$lib/views/BrightnessView.svelte";
   import VrchatView from "$lib/views/VrchatView.svelte";
+  import OscView from "$lib/views/OscView.svelte";
   import Placeholder from "$lib/views/Placeholder.svelte";
 
   const tabs = [
@@ -32,7 +33,7 @@
     {:else if active === "vrchat"}
       <VrchatView />
     {:else if active === "osc"}
-      <Placeholder title="OSC Automations" desc="Send OSC commands to VRChat on sleep and wake. Coming soon." />
+      <OscView />
     {:else}
       <Placeholder title="Settings" desc="Sleep schedule and general settings. Coming soon." />
     {/if}

@@ -5,6 +5,7 @@
 // The Svelte frontend talks to this engine in-process via Tauri commands; the VR
 // overlay talks to it over the Unix socket. Keep this app running (it can sit in
 // the background) for automations to work — in VR or in desktop VRChat.
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -16,6 +17,7 @@ use nemurixr_core::ipc::{self, Request, Response};
 use nemurixr_core::{Config, State};
 
 mod brightness;
+mod osc;
 mod sound;
 mod vrchat;
 
@@ -26,6 +28,8 @@ pub(crate) struct Engine {
     /// Last time the VR overlay talked to us (for the "overlay connected" status).
     last_overlay_seen: Option<Instant>,
     brightness: brightness::Backend,
+    /// VRChat OSC target discovered via OSCQuery (mDNS), if any.
+    osc_target: Option<SocketAddr>,
 }
 
 impl Engine {
@@ -34,7 +38,23 @@ impl Engine {
         let mut state = State::default();
         state.brightness_backend = brightness::name(backend);
         log::info!("brightness backend: {}", brightness::name(backend).unwrap_or_else(|| "none".into()));
-        Engine { config: Config::load(), state, last_overlay_seen: None, brightness: backend }
+        Engine { config: Config::load(), state, last_overlay_seen: None, brightness: backend, osc_target: None }
+    }
+
+    pub(crate) fn set_osc_target(&mut self, target: Option<SocketAddr>) {
+        self.osc_target = target;
+    }
+
+    /// Fire the OSC message list for a sleep/wake transition (non-blocking).
+    fn send_osc(&self, sleeping: bool) {
+        let msgs = if sleeping { self.config.osc.on_sleep.clone() } else { self.config.osc.on_wake.clone() };
+        if msgs.is_empty() {
+            return;
+        }
+        match osc::resolve_target(&self.config.osc, self.osc_target) {
+            Some(t) => osc::send_sequence(t, msgs),
+            None => log::warn!("OSC: no target resolved; skipping"),
+        }
     }
 
     /// Re-detect the backend and apply the sleep or wake brightness/fan level.
@@ -58,7 +78,8 @@ impl Engine {
             if self.config.brightness.enabled {
                 self.apply_brightness_level(active);
             }
-            // Future: OSC + VRChat status automations also fire here.
+            self.send_osc(active);
+            // Future: VRChat status automations also fire here.
         }
     }
 
@@ -66,6 +87,7 @@ impl Engine {
     fn snapshot(&self) -> State {
         let mut s = self.state.clone();
         s.overlay_running = self.last_overlay_seen.is_some_and(|t| t.elapsed().as_secs() < 3);
+        s.osc_target = osc::resolve_target(&self.config.osc, self.osc_target).map(|a| a.to_string());
         s
     }
 
@@ -126,6 +148,12 @@ fn apply_brightness(engine: tauri::State<Shared>, which: String) {
     engine.lock().unwrap().apply_brightness_level(which == "sleep");
 }
 
+/// Send an OSC message list now (preview). `which` is "sleep" or "wake".
+#[tauri::command]
+fn send_osc(engine: tauri::State<Shared>, which: String) {
+    engine.lock().unwrap().send_osc(which == "sleep");
+}
+
 /// Preview a notification sound. `kind` is "join" or "leave".
 #[tauri::command]
 fn test_sound(engine: tauri::State<Shared>, kind: String) {
@@ -149,6 +177,8 @@ pub fn run() {
 
     // VRChat log watcher: live player count + join/leave sounds (works without VR).
     vrchat::spawn(engine.clone());
+    // OSCQuery discovery of VRChat's OSC port.
+    osc::spawn_discovery(engine.clone());
 
     // IPC server for the VR overlay (reads state, sends sleep/config commands).
     {
@@ -182,6 +212,7 @@ pub fn run() {
             get_state,
             set_sleep,
             apply_brightness,
+            send_osc,
             test_sound
         ])
         .setup(|app| {

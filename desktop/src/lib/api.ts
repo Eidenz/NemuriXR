@@ -7,3 +7,4 @@ export const getState = () => invoke<State>("get_state");
 export const setSleep = (active: boolean) => invoke("set_sleep", { active });
 export const testSound = (kind: "join" | "leave") => invoke("test_sound", { kind });
 export const applyBrightness = (which: "sleep" | "wake") => invoke("apply_brightness", { which });
+export const sendOsc = (which: "sleep" | "wake") => invoke("send_osc", { which });

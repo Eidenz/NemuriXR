@@ -53,6 +53,7 @@ export type OscArg =
 export interface OscMessage {
   address: string;
   args: OscArg[];
+  delay_ms: number;
 }
 export interface OscConfig {
   host: string;
@@ -75,5 +76,6 @@ export interface State {
   vrchat_world: string | null;
   vrchat_status: string | null;
   brightness_backend: string | null;
+  osc_target: string | null;
   overlay_running: boolean;
 }
