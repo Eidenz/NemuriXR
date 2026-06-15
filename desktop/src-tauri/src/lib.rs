@@ -6,6 +6,7 @@
 // overlay talks to it over the Unix socket. Keep this app running (it can sit in
 // the background) for automations to work — in VR or in desktop VRChat.
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -13,8 +14,9 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
 
+use nemurixr_core::config::BrightnessLevel;
 use nemurixr_core::ipc::{self, Request, Response};
-use nemurixr_core::{Config, State};
+use nemurixr_core::{Config, SleepPhase, State};
 
 mod brightness;
 mod osc;
@@ -31,6 +33,10 @@ pub(crate) struct Engine {
     brightness: brightness::Backend,
     /// VRChat OSC target discovered via OSCQuery (mDNS), if any.
     osc_target: Option<SocketAddr>,
+    /// Last applied (brightness%, fan%) — the "from" point for the next fade.
+    bright_current: Arc<Mutex<Option<(u8, u8)>>>,
+    /// Bumped on each brightness transition; an in-flight fade aborts when it changes.
+    fade_gen: Arc<AtomicU64>,
 }
 
 impl Engine {
@@ -39,16 +45,36 @@ impl Engine {
         let mut state = State::default();
         state.brightness_backend = brightness::name(backend);
         log::info!("brightness backend: {}", brightness::name(backend).unwrap_or_else(|| "none".into()));
-        Engine { config: Config::load(), state, last_overlay_seen: None, brightness: backend, osc_target: None }
+        Engine {
+            config: Config::load(),
+            state,
+            last_overlay_seen: None,
+            brightness: backend,
+            osc_target: None,
+            bright_current: Arc::new(Mutex::new(None)),
+            fade_gen: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    fn brightness_level(&self, phase: SleepPhase) -> BrightnessLevel {
+        match phase {
+            SleepPhase::Awake => self.config.brightness.on_wake,
+            SleepPhase::Prepare => self.config.brightness.on_prepare,
+            SleepPhase::Sleep => self.config.brightness.on_sleep,
+        }
     }
 
     pub(crate) fn set_osc_target(&mut self, target: Option<SocketAddr>) {
         self.osc_target = target;
     }
 
-    /// Fire the OSC message list for a sleep/wake transition (non-blocking).
-    fn send_osc(&self, sleeping: bool) {
-        let msgs = if sleeping { self.config.osc.on_sleep.clone() } else { self.config.osc.on_wake.clone() };
+    /// Fire the OSC message list for a phase (non-blocking).
+    fn send_osc(&self, phase: SleepPhase) {
+        let msgs = match phase {
+            SleepPhase::Awake => self.config.osc.on_wake.clone(),
+            SleepPhase::Prepare => self.config.osc.on_prepare.clone(),
+            SleepPhase::Sleep => self.config.osc.on_sleep.clone(),
+        };
         if msgs.is_empty() {
             return;
         }
@@ -58,30 +84,45 @@ impl Engine {
         }
     }
 
-    /// Re-detect the backend and apply the sleep or wake brightness/fan level.
-    fn apply_brightness_level(&mut self, sleeping: bool) {
+    /// Fade brightness/fan into `level` over its transition time (cancelable).
+    fn fade_brightness(&mut self, level: BrightnessLevel) {
         self.brightness = brightness::detect();
         self.state.brightness_backend = brightness::name(self.brightness);
-        let lvl = if sleeping { self.config.brightness.on_sleep } else { self.config.brightness.on_wake };
-        brightness::apply(self.brightness, lvl.brightness, lvl.fan);
+        let backend = self.brightness;
+        let gen = self.fade_gen.fetch_add(1, Ordering::SeqCst) + 1;
+        let current = self.bright_current.clone();
+        let fade_gen = self.fade_gen.clone();
+        let to = (level.brightness, level.fan);
+        let dur = level.transition_seconds;
+        std::thread::spawn(move || brightness::transition(backend, current, fade_gen, gen, to, dur));
+    }
+
+    /// Apply `level` immediately (no fade) — used for previews.
+    fn preview_brightness(&mut self, level: BrightnessLevel) {
+        self.brightness = brightness::detect();
+        self.state.brightness_backend = brightness::name(self.brightness);
+        self.fade_gen.fetch_add(1, Ordering::SeqCst); // cancel any in-flight fade
+        brightness::set_now(self.brightness, level.brightness, level.fan);
+        *self.bright_current.lock().unwrap() = Some((level.brightness, level.fan));
     }
 
     fn apply_config(&mut self, config: Config) {
         self.config = config;
         self.config.save();
-        // Later milestones re-apply live settings (brightness, watchers…) here.
     }
 
-    fn set_sleep(&mut self, active: bool) {
-        if self.state.sleep_active != active {
-            self.state.sleep_active = active;
-            log::info!("sleep mode -> {active}");
-            if self.config.brightness.enabled {
-                self.apply_brightness_level(active);
-            }
-            self.send_osc(active);
-            // Future: VRChat status automations also fire here.
+    fn set_phase(&mut self, phase: SleepPhase) {
+        if self.state.sleep_phase == phase {
+            return;
         }
+        self.state.sleep_phase = phase;
+        log::info!("sleep phase -> {phase:?}");
+        if self.config.brightness.enabled {
+            let level = self.brightness_level(phase);
+            self.fade_brightness(level);
+        }
+        self.send_osc(phase);
+        // Future: VRChat status automations also fire here.
     }
 
     /// A state snapshot with the derived `overlay_running` flag filled in.
@@ -114,7 +155,7 @@ impl Engine {
         if n.only_when_alone && !alone_condition {
             return None;
         }
-        if n.only_when_sleep && !self.state.sleep_active {
+        if n.only_when_sleep && !self.state.sleep_phase.is_active() {
             return None;
         }
         Some(if is_join { n.join_sound.clone() } else { n.leave_sound.clone() })
@@ -139,20 +180,30 @@ fn get_state(engine: tauri::State<Shared>) -> State {
 }
 
 #[tauri::command]
-fn set_sleep(engine: tauri::State<Shared>, active: bool) {
-    engine.lock().unwrap().set_sleep(active);
+fn set_phase(engine: tauri::State<Shared>, phase: SleepPhase) {
+    engine.lock().unwrap().set_phase(phase);
 }
 
-/// Apply a brightness/fan level now (preview). `which` is "sleep" or "wake".
+fn phase_from_str(s: &str) -> SleepPhase {
+    match s {
+        "prepare" => SleepPhase::Prepare,
+        "sleep" => SleepPhase::Sleep,
+        _ => SleepPhase::Awake,
+    }
+}
+
+/// Apply a phase's brightness/fan level now (preview). `which` is awake/prepare/sleep.
 #[tauri::command]
 fn apply_brightness(engine: tauri::State<Shared>, which: String) {
-    engine.lock().unwrap().apply_brightness_level(which == "sleep");
+    let mut g = engine.lock().unwrap();
+    let level = g.brightness_level(phase_from_str(&which));
+    g.preview_brightness(level);
 }
 
-/// Send an OSC message list now (preview). `which` is "sleep" or "wake".
+/// Send a phase's OSC message list now (preview). `which` is awake/prepare/sleep.
 #[tauri::command]
 fn send_osc(engine: tauri::State<Shared>, which: String) {
-    engine.lock().unwrap().send_osc(which == "sleep");
+    engine.lock().unwrap().send_osc(phase_from_str(&which));
 }
 
 /// Preview a notification sound. `kind` is "join" or "leave".
@@ -196,8 +247,8 @@ pub fn run() {
                     g.apply_config(config);
                     Response::Ok
                 }
-                Request::SetSleep { active } => {
-                    g.set_sleep(active);
+                Request::SetPhase { phase } => {
+                    g.set_phase(phase);
                     Response::Ok
                 }
             }
@@ -213,7 +264,7 @@ pub fn run() {
             get_config,
             set_config,
             get_state,
-            set_sleep,
+            set_phase,
             apply_brightness,
             send_osc,
             test_sound

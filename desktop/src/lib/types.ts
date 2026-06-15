@@ -2,15 +2,18 @@
 
 export type ListMode = "whitelist" | "blacklist";
 export type VrcStatus = "join_me" | "active" | "ask_me" | "busy";
+export type SleepPhase = "awake" | "prepare" | "sleep";
 
 export interface BrightnessLevel {
   brightness: number; // 0-100
   fan: number; // 0-100 (Beyond only)
+  transition_seconds: number; // fade time into this level
 }
 export interface BrightnessConfig {
   enabled: boolean;
-  on_sleep: BrightnessLevel;
   on_wake: BrightnessLevel;
+  on_prepare: BrightnessLevel;
+  on_sleep: BrightnessLevel;
 }
 export interface SleepConfig {
   schedule_enabled: boolean;
@@ -59,8 +62,9 @@ export interface OscConfig {
   host: string;
   port: number;
   use_oscquery: boolean;
-  on_sleep: OscMessage[];
   on_wake: OscMessage[];
+  on_prepare: OscMessage[];
+  on_sleep: OscMessage[];
 }
 export interface Config {
   block_game_input: boolean;
@@ -71,7 +75,7 @@ export interface Config {
 }
 
 export interface State {
-  sleep_active: boolean;
+  sleep_phase: SleepPhase;
   player_count: number;
   vrchat_world: string | null;
   vrchat_status: string | null;

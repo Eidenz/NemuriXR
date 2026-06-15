@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{Local, Timelike};
+use nemurixr_core::SleepPhase;
 
 use crate::Engine;
 
@@ -28,13 +29,13 @@ fn run(engine: Arc<Mutex<Engine>>) {
                 if let Some(t) = sleep_at {
                     if crossed(p, now, t) {
                         log::info!("schedule: sleep at {:02}:{:02}", t / 60, t % 60);
-                        engine.lock().unwrap().set_sleep(true);
+                        engine.lock().unwrap().set_phase(SleepPhase::Sleep);
                     }
                 }
                 if let Some(t) = wake_at {
                     if crossed(p, now, t) {
                         log::info!("schedule: wake at {:02}:{:02}", t / 60, t % 60);
-                        engine.lock().unwrap().set_sleep(false);
+                        engine.lock().unwrap().set_phase(SleepPhase::Awake);
                     }
                 }
             }

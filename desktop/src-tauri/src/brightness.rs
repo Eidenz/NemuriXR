@@ -1,9 +1,18 @@
-// Headset brightness (and fan) control for sleep/wake.
+// Headset brightness (and fan) control with timed fades.
 //
 //  - Bigscreen Beyond: raw HID feature reports over /dev/hidraw (ported from
 //    bsb-control). Works without VR; supports fan speed.
 //  - Fallback: libmonado's generic display brightness (any Monado headset; needs
-//    monado-service running; no fan control).
+//    monado-service; no fan control).
+//
+// A `Session` opens the backend once so a fade can write many steps cheaply, and
+// `transition()` (run on a thread) lerps from the current level to the target
+// over `duration_secs`, cancelable when a newer transition bumps `fade_gen`.
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
 use libmonado::{DeviceLogic, DeviceRole, Monado};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -32,21 +41,83 @@ pub fn name(b: Backend) -> Option<String> {
     }
 }
 
-/// Apply brightness (0–100 %) and, on the Beyond, fan speed (0–100 %).
-pub fn apply(b: Backend, brightness_pct: u8, fan_pct: u8) {
-    match b {
-        Backend::Beyond => {
-            if !beyond::set(brightness_pct, fan_pct) {
-                log::warn!("Beyond HID write failed (brightness {brightness_pct}%, fan {fan_pct}%)");
-            }
+/// An open handle to the backend, reused across the steps of a fade.
+pub enum Session {
+    Beyond(PathBuf),
+    Monado(Monado),
+    None,
+}
+
+impl Session {
+    pub fn open(backend: Backend) -> Self {
+        match backend {
+            Backend::Beyond => beyond::find_device().map(Session::Beyond).unwrap_or(Session::None),
+            Backend::Monado => Monado::auto_connect().ok().map(Session::Monado).unwrap_or(Session::None),
+            Backend::None => Session::None,
         }
-        Backend::Monado => {
-            if !monado_set(brightness_pct) {
-                log::warn!("libmonado brightness set failed ({brightness_pct}%)");
-            }
-        }
-        Backend::None => log::warn!("no brightness backend; skipping"),
     }
+
+    pub fn set(&self, brightness_pct: u8, fan_pct: u8) {
+        match self {
+            Session::Beyond(path) => {
+                if !beyond::write(path, brightness_pct, fan_pct) {
+                    log::warn!("Beyond HID write failed");
+                }
+            }
+            Session::Monado(m) => {
+                if let Ok(dev) = m.device_from_role(DeviceRole::Head) {
+                    let _ = dev.set_brightness((brightness_pct.min(100) as f32 / 100.0).clamp(0.0, 1.0), false);
+                }
+            }
+            Session::None => {}
+        }
+    }
+}
+
+/// Set a level immediately (no fade) — used for previews and instant snaps.
+pub fn set_now(backend: Backend, brightness_pct: u8, fan_pct: u8) {
+    Session::open(backend).set(brightness_pct, fan_pct);
+}
+
+/// Fade from the current level (in `current`) to `to` over `duration_secs`,
+/// updating `current` as it goes. Aborts if `fade_gen` no longer equals `gen`
+/// (a newer transition superseded this one). Intended to be run on a thread.
+#[allow(clippy::too_many_arguments)]
+pub fn transition(
+    backend: Backend,
+    current: Arc<Mutex<Option<(u8, u8)>>>,
+    fade_gen: Arc<AtomicU64>,
+    gen: u64,
+    to: (u8, u8),
+    duration_secs: u32,
+) {
+    let session = Session::open(backend);
+    let from = current.lock().unwrap().unwrap_or(to);
+    if duration_secs == 0 || from == to {
+        session.set(to.0, to.1);
+        *current.lock().unwrap() = Some(to);
+        return;
+    }
+    let start = Instant::now();
+    let total = duration_secs as f32;
+    loop {
+        if fade_gen.load(Ordering::SeqCst) != gen {
+            return; // superseded by a newer transition
+        }
+        let t = (start.elapsed().as_secs_f32() / total).min(1.0);
+        let b = lerp(from.0, to.0, t);
+        let f = lerp(from.1, to.1, t);
+        session.set(b, f);
+        *current.lock().unwrap() = Some((b, f));
+        if t >= 1.0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+fn lerp(a: u8, b: u8, t: f32) -> u8 {
+    (a as f32 + (b as f32 - a as f32) * t).round().clamp(0.0, 255.0) as u8
 }
 
 fn monado_available() -> bool {
@@ -55,17 +126,11 @@ fn monado_available() -> bool {
     dev.brightness().is_ok()
 }
 
-fn monado_set(brightness_pct: u8) -> bool {
-    let Ok(m) = Monado::auto_connect() else { return false };
-    let Ok(dev) = m.device_from_role(DeviceRole::Head) else { return false };
-    dev.set_brightness((brightness_pct.min(100) as f32 / 100.0).clamp(0.0, 1.0), false).is_ok()
-}
-
 /// Bigscreen Beyond HID control (VID 0x35BD / PID 0x0101).
 mod beyond {
     use std::fs::OpenOptions;
     use std::os::unix::io::AsRawFd;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     const VID: &str = "000035BD"; // as it appears in HID_ID (8 hex)
     const PID: &str = "00000101";
@@ -82,7 +147,6 @@ mod beyond {
         for entry in std::fs::read_dir("/sys/class/hidraw").ok()?.flatten() {
             let uevent = entry.path().join("device/uevent");
             let Ok(txt) = std::fs::read_to_string(&uevent) else { continue };
-            // HID_ID=0003:000035BD:00000101
             let matches = txt
                 .lines()
                 .any(|l| l.starts_with("HID_ID=") && l.contains(VID) && l.contains(PID));
@@ -99,7 +163,6 @@ mod beyond {
 
     fn send_feature(fd: i32, payload: &[u8]) -> bool {
         let mut buf = [0u8; REPORT_LEN];
-        // buf[0] = report id 0x00; payload follows.
         for (i, b) in payload.iter().enumerate() {
             if i + 1 < REPORT_LEN {
                 buf[i + 1] = *b;
@@ -109,9 +172,8 @@ mod beyond {
         r >= 0
     }
 
-    pub fn set(brightness_pct: u8, fan_pct: u8) -> bool {
-        let Some(path) = find_device() else { return false };
-        let Ok(file) = OpenOptions::new().read(true).write(true).open(&path) else { return false };
+    pub fn write(path: &Path, brightness_pct: u8, fan_pct: u8) -> bool {
+        let Ok(file) = OpenOptions::new().read(true).write(true).open(path) else { return false };
         let fd = file.as_raw_fd();
         let val = (brightness_pct.min(100) as u32 * 1023 / 100) as u16;
         let ok_b = send_feature(fd, &[CMD_BRIGHTNESS, (val >> 8) as u8, (val & 0xFF) as u8]);

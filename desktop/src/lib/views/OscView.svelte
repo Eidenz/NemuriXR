@@ -27,14 +27,14 @@
       Each message can wait a delay, so a list runs as a sequence. VRChat's OSC must be enabled (it is by default).
     </p>
 
-    {#each [{ key: "sleep" as const, title: "When I go to sleep", list: osc.on_sleep }, { key: "wake" as const, title: "When I wake up", list: osc.on_wake }] as group (group.key)}
+    {#each [{ key: "awake" as const, title: "When I wake up", list: osc.on_wake }, { key: "prepare" as const, title: "When I prepare to sleep", list: osc.on_prepare }, { key: "sleep" as const, title: "When I go to sleep", list: osc.on_sleep }] as group (group.key)}
       <GlassCard title={group.title}>
         <div class="msgs">
           {#each group.list as msg, i (i)}
             <OscRow message={msg} onchange={saveSoon} onremove={() => removeMsg(group.list, i)} />
           {/each}
           {#if group.list.length === 0}
-            <p class="empty">No messages — nothing is sent when you {group.key === "sleep" ? "go to sleep" : "wake up"}.</p>
+            <p class="empty">No messages — nothing is sent for this phase.</p>
           {/if}
         </div>
         <div class="actions">

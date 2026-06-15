@@ -1,7 +1,7 @@
 // Shared reactive state (Svelte 5 runes). Polls the overlay/core over the Tauri
 // IPC bridge; edits flow back via `save()` (debounced).
-import { getConfig, setConfig, getState, setSleep } from "./api";
-import type { Config, State } from "./types";
+import { getConfig, setConfig, getState, setPhase } from "./api";
+import type { Config, SleepPhase, State } from "./types";
 
 export const app = $state<{ config: Config | null; state: State | null; connected: boolean }>({
   config: null,
@@ -38,13 +38,12 @@ export function saveSoon() {
   saveTimer = setTimeout(save, 300);
 }
 
-export async function toggleSleep() {
-  const next = !(app.state?.sleep_active ?? false);
+export async function setSleepPhase(phase: SleepPhase) {
   try {
-    await setSleep(next);
-    if (app.state) app.state.sleep_active = next;
+    await setPhase(phase);
+    if (app.state) app.state.sleep_phase = phase;
   } catch (e) {
-    console.error("setSleep failed", e);
+    console.error("setPhase failed", e);
   }
 }
 

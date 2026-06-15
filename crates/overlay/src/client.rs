@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use nemurixr_core::ipc::Client;
-use nemurixr_core::{Config, State};
+use nemurixr_core::{Config, SleepPhase, State};
 
 enum Cmd {
-    SetSleep(bool),
+    SetPhase(SleepPhase),
     SetConfig(Config),
 }
 
@@ -51,9 +51,9 @@ impl EngineLink {
     }
 
     /// Optimistically reflect the change locally, then queue it for the engine.
-    pub fn set_sleep(&self, active: bool) {
-        self.shared.lock().unwrap().state.sleep_active = active;
-        let _ = self.tx.send(Cmd::SetSleep(active));
+    pub fn set_phase(&self, phase: SleepPhase) {
+        self.shared.lock().unwrap().state.sleep_phase = phase;
+        let _ = self.tx.send(Cmd::SetPhase(phase));
     }
 
     pub fn set_config(&self, config: Config) {
@@ -87,7 +87,7 @@ fn pump(c: &mut Client, shared: &Arc<Mutex<LinkState>>, rx: &Receiver<Cmd>) -> b
     loop {
         while let Ok(cmd) = rx.try_recv() {
             let r = match cmd {
-                Cmd::SetSleep(a) => c.set_sleep(a),
+                Cmd::SetPhase(p) => c.set_phase(p),
                 Cmd::SetConfig(cfg) => c.set_config(cfg),
             };
             if r.is_err() {

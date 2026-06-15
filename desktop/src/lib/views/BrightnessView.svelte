@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app, save, saveSoon } from "$lib/state.svelte";
   import { applyBrightness } from "$lib/api";
+  import type { BrightnessLevel, SleepPhase } from "$lib/types";
   import GlassCard from "$lib/components/GlassCard.svelte";
   import Toggle from "$lib/components/Toggle.svelte";
   import Slider from "$lib/components/Slider.svelte";
@@ -8,6 +9,13 @@
   // Fan control only exists on the Bigscreen Beyond (HID); the libmonado
   // fallback can't set fans.
   const beyond = $derived(app.state?.brightness_backend === "Bigscreen Beyond");
+
+  // Phase → its brightness level (Awake uses on_wake, etc.).
+  const cards: { key: SleepPhase; title: string; level: () => BrightnessLevel }[] = [
+    { key: "awake", title: "When I wake up", level: () => app.config!.brightness.on_wake },
+    { key: "prepare", title: "When I prepare to sleep", level: () => app.config!.brightness.on_prepare },
+    { key: "sleep", title: "When I go to sleep", level: () => app.config!.brightness.on_sleep },
+  ];
 </script>
 
 {#if app.config}
@@ -15,26 +23,23 @@
     <div class="head">
       <div>
         <h2>Brightness &amp; Fans</h2>
-        <p>Dim the headset (and slow its fans) when you go to sleep, and restore it when you wake.</p>
+        <p>Each phase has its own brightness and fan level, with a fade time to ease into it.</p>
       </div>
-      <Toggle bind:checked={app.config.brightness.enabled} onchange={save} />
+      <Toggle bind:checked={app.config.brightness.enabled} label="Brightness automations" onchange={save} />
     </div>
 
     <div class="grid" class:off={!app.config.brightness.enabled}>
-      <GlassCard title="When I go to sleep">
-        <div class="sliders">
-          <Slider label="Brightness" suffix="%" bind:value={app.config.brightness.on_sleep.brightness} onchange={saveSoon} />
-          <Slider label="Fan speed" suffix="%" disabled={!beyond} bind:value={app.config.brightness.on_sleep.fan} onchange={saveSoon} />
-        </div>
-        <button class="btn tonal state-layer preview" onclick={() => applyBrightness("sleep")}>Preview on headset</button>
-      </GlassCard>
-      <GlassCard title="When I wake up">
-        <div class="sliders">
-          <Slider label="Brightness" suffix="%" bind:value={app.config.brightness.on_wake.brightness} onchange={saveSoon} />
-          <Slider label="Fan speed" suffix="%" disabled={!beyond} bind:value={app.config.brightness.on_wake.fan} onchange={saveSoon} />
-        </div>
-        <button class="btn tonal state-layer preview" onclick={() => applyBrightness("wake")}>Preview on headset</button>
-      </GlassCard>
+      {#each cards as c (c.key)}
+        {@const lvl = c.level()}
+        <GlassCard title={c.title}>
+          <div class="sliders">
+            <Slider label="Brightness" suffix="%" bind:value={lvl.brightness} onchange={saveSoon} />
+            <Slider label="Fan speed" suffix="%" disabled={!beyond} bind:value={lvl.fan} onchange={saveSoon} />
+            <Slider label="Fade time" suffix="s" max={120} bind:value={lvl.transition_seconds} onchange={saveSoon} />
+          </div>
+          <button class="btn tonal state-layer preview" onclick={() => applyBrightness(c.key)}>Preview on headset</button>
+        </GlassCard>
+      {/each}
     </div>
 
     {#if !beyond}
@@ -51,7 +56,7 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
-    max-width: 880px;
+    max-width: 1000px;
     margin: 0 auto;
   }
   .head {
@@ -72,7 +77,7 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 18px;
     transition: opacity 0.2s var(--ease);
   }
@@ -83,13 +88,14 @@
   .sliders {
     display: flex;
     flex-direction: column;
-    gap: 22px;
+    gap: 20px;
   }
   .preview {
     margin-top: 20px;
     height: 34px;
     padding: 0 16px;
     font-size: 13px;
+    width: 100%;
   }
   .note {
     color: hsl(var(--muted-foreground));

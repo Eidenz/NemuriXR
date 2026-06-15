@@ -42,10 +42,11 @@ pub struct SleepConfig {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BrightnessConfig {
-    /// Apply brightness/fan changes on sleep/wake transitions.
+    /// Apply brightness/fan changes on phase transitions.
     pub enabled: bool,
-    pub on_sleep: BrightnessLevel,
     pub on_wake: BrightnessLevel,
+    pub on_prepare: BrightnessLevel,
+    pub on_sleep: BrightnessLevel,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -55,6 +56,8 @@ pub struct BrightnessLevel {
     pub brightness: u8,
     /// 0–100 % fan speed (Bigscreen Beyond only; ignored otherwise).
     pub fan: u8,
+    /// Seconds to fade into this level (0 = instant).
+    pub transition_seconds: u32,
 }
 
 // ---- VRChat ---------------------------------------------------------------
@@ -133,8 +136,9 @@ pub struct OscConfig {
     pub port: u16,
     /// Auto-discover VRChat's OSC port via OSCQuery instead of `port`.
     pub use_oscquery: bool,
-    pub on_sleep: Vec<OscMessage>,
     pub on_wake: Vec<OscMessage>,
+    pub on_prepare: Vec<OscMessage>,
+    pub on_sleep: Vec<OscMessage>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -165,7 +169,7 @@ impl Default for SleepConfig {
 
 impl Default for BrightnessLevel {
     fn default() -> Self {
-        Self { brightness: 100, fan: 100 }
+        Self { brightness: 100, fan: 100, transition_seconds: 0 }
     }
 }
 
@@ -173,8 +177,9 @@ impl Default for BrightnessConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            on_sleep: BrightnessLevel { brightness: 10, fan: 30 },
-            on_wake: BrightnessLevel { brightness: 100, fan: 100 },
+            on_wake: BrightnessLevel { brightness: 100, fan: 100, transition_seconds: 2 },
+            on_prepare: BrightnessLevel { brightness: 40, fan: 50, transition_seconds: 10 },
+            on_sleep: BrightnessLevel { brightness: 10, fan: 30, transition_seconds: 30 },
         }
     }
 }
@@ -218,7 +223,14 @@ impl Default for StatusConfig {
 
 impl Default for OscConfig {
     fn default() -> Self {
-        Self { host: "127.0.0.1".to_string(), port: 9000, use_oscquery: true, on_sleep: Vec::new(), on_wake: Vec::new() }
+        Self {
+            host: "127.0.0.1".to_string(),
+            port: 9000,
+            use_oscquery: true,
+            on_wake: Vec::new(),
+            on_prepare: Vec::new(),
+            on_sleep: Vec::new(),
+        }
     }
 }
 

@@ -3,11 +3,30 @@
 // `Config`, which is the persisted settings both sides edit.
 use serde::{Deserialize, Serialize};
 
+/// The sleep state machine: Awake → Prepare → Sleep (and back to Awake).
+/// Each phase has its own brightness/fan + OSC automations.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SleepPhase {
+    #[default]
+    Awake,
+    Prepare,
+    Sleep,
+}
+
+impl SleepPhase {
+    /// True when sleep mode is "on" (preparing or asleep) — used by the
+    /// "only when sleep mode is enabled" automation conditions.
+    pub fn is_active(self) -> bool {
+        self != SleepPhase::Awake
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct State {
-    /// Sleep mode currently active.
-    pub sleep_active: bool,
+    /// Current sleep phase.
+    pub sleep_phase: SleepPhase,
     /// Players in your current VRChat world (includes you), 0 if not in a world.
     pub player_count: u32,
     /// Current VRChat world/instance name, if in one.

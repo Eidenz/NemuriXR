@@ -11,7 +11,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::state::State;
+use crate::state::{SleepPhase, State};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -22,8 +22,8 @@ pub enum Request {
     SetConfig { config: Config },
     /// Fetch the live runtime state.
     GetState,
-    /// Command sleep mode on/off.
-    SetSleep { active: bool },
+    /// Command the sleep phase (Awake / Prepare / Sleep).
+    SetPhase { phase: SleepPhase },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -155,8 +155,8 @@ impl Client {
         }
     }
 
-    pub fn set_sleep(&mut self, active: bool) -> Result<()> {
-        match self.request(&Request::SetSleep { active })? {
+    pub fn set_phase(&mut self, phase: SleepPhase) -> Result<()> {
+        match self.request(&Request::SetPhase { phase })? {
             Response::Ok => Ok(()),
             Response::Error { message } => anyhow::bail!(message),
             _ => anyhow::bail!("unexpected response"),

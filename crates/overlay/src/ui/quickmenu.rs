@@ -6,6 +6,7 @@
 use egui::{Align2, Color32, FontId, Sense};
 use egui_phosphor::regular as icons;
 use nemurixr_core::config::Config;
+use nemurixr_core::SleepPhase;
 
 use crate::theme;
 
@@ -17,7 +18,7 @@ pub enum Screen {
 
 pub enum MenuAction {
     None,
-    ToggleSleep,
+    SetPhase(SleepPhase),
     OpenAutomations,
     Back,
 }
@@ -28,7 +29,7 @@ pub enum MenuAction {
 pub fn build_menu(
     ctx: &egui::Context,
     screen: Screen,
-    sleep_active: bool,
+    phase: SleepPhase,
     connected: bool,
     clock: &str,
     cfg: &mut Config,
@@ -42,7 +43,7 @@ pub fn build_menu(
                 offline_banner(ui);
             }
             match screen {
-                Screen::Home => home(ui, sleep_active, clock, &mut action),
+                Screen::Home => home(ui, phase, clock, &mut action),
                 Screen::Automations => automations(ui, cfg, changed, &mut action),
             }
         });
@@ -66,7 +67,7 @@ fn offline_banner(ui: &mut egui::Ui) {
     ui.add_space(10.0);
 }
 
-fn home(ui: &mut egui::Ui, sleep_active: bool, clock: &str, action: &mut MenuAction) {
+fn home(ui: &mut egui::Ui, phase: SleepPhase, clock: &str, action: &mut MenuAction) {
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(format!("{}  ", icons::MOON)).size(26.0).color(theme::SLEEP));
         ui.label(egui::RichText::new("Nemuri").size(26.0).strong().color(Color32::WHITE));
@@ -77,13 +78,21 @@ fn home(ui: &mut egui::Ui, sleep_active: bool, clock: &str, action: &mut MenuAct
     });
     ui.add_space(14.0);
 
-    if sleep_card(ui, sleep_active) {
-        *action = MenuAction::ToggleSleep;
+    // The big card toggles between Awake and Sleep.
+    if sleep_card(ui, phase) {
+        let target = if phase == SleepPhase::Awake { SleepPhase::Sleep } else { SleepPhase::Awake };
+        *action = MenuAction::SetPhase(target);
     }
-    ui.add_space(12.0);
+    ui.add_space(10.0);
+
+    // Prepare-to-sleep (highlighted while preparing).
+    if wide_button(ui, icons::BED, "Prepare to sleep", phase == SleepPhase::Prepare) {
+        *action = MenuAction::SetPhase(SleepPhase::Prepare);
+    }
+    ui.add_space(8.0);
 
     // Entry to the automations toggle list.
-    if wide_button(ui, icons::SLIDERS_HORIZONTAL, "Automations") {
+    if wide_button(ui, icons::SLIDERS_HORIZONTAL, "Automations", false) {
         *action = MenuAction::OpenAutomations;
     }
 }
@@ -108,42 +117,61 @@ fn automations(ui: &mut egui::Ui, cfg: &mut Config, changed: &mut bool, action: 
     *changed |= toggle_row(ui, icons::GAME_CONTROLLER, "Block Game Input", "While pointing at panels", &mut cfg.block_game_input);
 }
 
-/// The wide Sleep Mode card. Cyan when active. Returns true on click.
-fn sleep_card(ui: &mut egui::Ui, active: bool) -> bool {
+/// The big Sleep Mode card: grey (Awake), blue (Preparing), cyan (Sleeping).
+/// Returns true on click.
+fn sleep_card(ui: &mut egui::Ui, phase: SleepPhase) -> bool {
     let w = ui.available_width();
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 128.0), Sense::click());
-    let fill = if active {
-        if resp.hovered() { theme::SLEEP } else { theme::SLEEP_DEEP }
-    } else if resp.hovered() {
-        Color32::from_rgb(56, 64, 82)
-    } else {
-        theme::SURFACE_CONTAINER_HIGH
+    let hot = resp.hovered();
+    let fill = match phase {
+        SleepPhase::Sleep => {
+            if hot {
+                theme::SLEEP
+            } else {
+                theme::SLEEP_DEEP
+            }
+        }
+        SleepPhase::Prepare => Color32::from_rgb(70, 100, 140),
+        SleepPhase::Awake => {
+            if hot {
+                Color32::from_rgb(56, 64, 82)
+            } else {
+                theme::SURFACE_CONTAINER_HIGH
+            }
+        }
     };
+    let lit = phase != SleepPhase::Awake;
     let p = ui.painter();
     p.rect_filled(rect, egui::CornerRadius::same(18), fill);
-    let fg = if active { Color32::WHITE } else { theme::ON_SURFACE };
-    let sub = if active { Color32::from_white_alpha(210) } else { theme::ON_SURFACE_VAR };
+    let fg = if lit { Color32::WHITE } else { theme::ON_SURFACE };
+    let sub = if lit { Color32::from_white_alpha(210) } else { theme::ON_SURFACE_VAR };
+    let status = match phase {
+        SleepPhase::Awake => "Inactive",
+        SleepPhase::Prepare => "Preparing",
+        SleepPhase::Sleep => "Active",
+    };
     p.text(egui::pos2(rect.left() + 78.0, rect.center().y), Align2::CENTER_CENTER, icons::MOON, FontId::proportional(60.0), fg);
     p.text(egui::pos2(rect.right() - 32.0, rect.center().y - 22.0), Align2::RIGHT_CENTER, "Sleep Mode", FontId::proportional(20.0), sub);
-    p.text(
-        egui::pos2(rect.right() - 32.0, rect.center().y + 18.0),
-        Align2::RIGHT_CENTER,
-        if active { "Active" } else { "Inactive" },
-        FontId::proportional(40.0),
-        fg,
-    );
+    p.text(egui::pos2(rect.right() - 32.0, rect.center().y + 18.0), Align2::RIGHT_CENTER, status, FontId::proportional(38.0), fg);
     resp.clicked()
 }
 
-/// A full-width button with an icon + label.
-fn wide_button(ui: &mut egui::Ui, icon: &str, label: &str) -> bool {
+/// A full-width button with an icon + label; `active` tints it with the accent.
+fn wide_button(ui: &mut egui::Ui, icon: &str, label: &str, active: bool) -> bool {
     let w = ui.available_width();
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 64.0), Sense::click());
-    let fill = if resp.hovered() { Color32::from_rgb(56, 64, 82) } else { theme::SURFACE_CONTAINER };
+    let fill = if active {
+        Color32::from_rgb(70, 100, 140)
+    } else if resp.hovered() {
+        Color32::from_rgb(56, 64, 82)
+    } else {
+        theme::SURFACE_CONTAINER
+    };
+    let fg = if active { Color32::WHITE } else { theme::ON_SURFACE };
     let p = ui.painter();
     p.rect_filled(rect, egui::CornerRadius::same(14), fill);
-    p.text(egui::pos2(rect.left() + 26.0, rect.center().y), Align2::LEFT_CENTER, icon, FontId::proportional(26.0), theme::ON_SURFACE);
-    p.text(egui::pos2(rect.left() + 64.0, rect.center().y), Align2::LEFT_CENTER, label, FontId::proportional(19.0), theme::ON_SURFACE);
+    p.text(egui::pos2(rect.left() + 26.0, rect.center().y), Align2::LEFT_CENTER, icon, FontId::proportional(26.0), fg);
+    p.text(egui::pos2(rect.left() + 64.0, rect.center().y), Align2::LEFT_CENTER, label, FontId::proportional(19.0), fg);
     resp.clicked()
 }
 

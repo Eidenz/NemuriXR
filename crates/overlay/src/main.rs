@@ -107,7 +107,7 @@ fn run() -> Result<()> {
 
         let engine_state = link.state();
         let connected = link.connected();
-        let sleeping = engine_state.sleep_active;
+        let phase = engine_state.sleep_phase;
 
         // Input: toggle the menu, then point/grab it.
         let mut ptr: Option<(f32, f32, bool)> = None;
@@ -153,10 +153,10 @@ fn run() -> Result<()> {
         let mut cfg = link.config();
         let mut cfg_changed = false;
         menu.render(&gpu, alpha_mode, ptr, |ctx| {
-            action = build_menu(ctx, screen, sleeping, connected, &clock, &mut cfg, &mut cfg_changed, panel_alpha);
+            action = build_menu(ctx, screen, phase, connected, &clock, &mut cfg, &mut cfg_changed, panel_alpha);
         })?;
         match action {
-            MenuAction::ToggleSleep => link.set_sleep(!sleeping),
+            MenuAction::SetPhase(p) => link.set_phase(p),
             MenuAction::OpenAutomations => screen = Screen::Automations,
             MenuAction::Back => screen = Screen::Home,
             MenuAction::None => {}

@@ -1,22 +1,33 @@
 <script lang="ts">
-  import { app, toggleSleep } from "$lib/state.svelte";
+  import { app, setSleepPhase } from "$lib/state.svelte";
   import GlassCard from "$lib/components/GlassCard.svelte";
 
-  const sleeping = $derived(app.state?.sleep_active ?? false);
+  const phase = $derived(app.state?.sleep_phase ?? "awake");
   const players = $derived(app.state?.player_count ?? 0);
   const world = $derived(app.state?.vrchat_world ?? null);
   const backend = $derived(app.state?.brightness_backend ?? null);
+  const status = $derived(phase === "sleep" ? "Active" : phase === "prepare" ? "Preparing" : "Inactive");
+
+  // The big card toggles between Awake and Sleep.
+  const toggleCard = () => setSleepPhase(phase === "awake" ? "sleep" : "awake");
 </script>
 
 <div class="view">
-  <button class="sleepcard glass" class:on={sleeping} onclick={toggleSleep}>
+  <button class="sleepcard glass" class:sleep={phase === "sleep"} class:prepare={phase === "prepare"} onclick={toggleCard}>
     <svg viewBox="0 0 24 24" width="56" height="56" aria-hidden="true">
       <path fill="currentColor" d="M12.7 2a8 8 0 1 0 9.3 9.3 7 7 0 0 1-9.3-9.3Z" />
     </svg>
     <div class="txt">
       <span class="k">Sleep Mode</span>
-      <span class="v">{sleeping ? "Active" : "Inactive"}</span>
+      <span class="v">{status}</span>
     </div>
+  </button>
+
+  <button class="prep glass" class:on={phase === "prepare"} onclick={() => setSleepPhase("prepare")}>
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path fill="currentColor" d="M12.7 2a8 8 0 1 0 9.3 9.3 7 7 0 0 1-9.3-9.3Z" />
+    </svg>
+    Prepare to sleep
   </button>
 
   <div class="grid">
@@ -35,7 +46,7 @@
   .view {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 16px;
     max-width: 880px;
     margin: 0 auto;
   }
@@ -52,10 +63,14 @@
   .sleepcard:hover {
     border-color: hsl(var(--glass-border) / 0.16);
   }
-  .sleepcard.on {
+  .sleepcard.sleep {
     background: linear-gradient(135deg, hsl(var(--primary) / 0.9), hsl(258 60% 52% / 0.9));
     color: #fff;
     box-shadow: 0 14px 40px hsl(var(--primary) / 0.35);
+  }
+  .sleepcard.prepare {
+    background: linear-gradient(135deg, hsl(212 55% 45% / 0.85), hsl(230 50% 40% / 0.85));
+    color: #fff;
   }
   .sleepcard .txt {
     display: flex;
@@ -74,13 +89,36 @@
     color: hsl(var(--foreground));
     line-height: 1.1;
   }
-  .sleepcard.on .v {
+  .sleepcard.sleep .v,
+  .sleepcard.prepare .v {
+    color: #fff;
+  }
+  .prep {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    height: 52px;
+    border-radius: var(--radius-m);
+    color: hsl(var(--muted-foreground));
+    font-size: 15px;
+    font-weight: 600;
+    transition: all 0.15s var(--ease);
+  }
+  .prep:hover {
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--glass-border) / 0.16);
+  }
+  .prep.on {
+    background: hsl(212 55% 45% / 0.55);
     color: #fff;
   }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 18px;
+    margin-top: 2px;
   }
   .stat {
     display: flex;
