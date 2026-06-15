@@ -90,38 +90,60 @@ fn handle_message(text: &str, engine: &Arc<Mutex<Engine>>, api: &SharedApi) {
 fn maybe_accept(engine: &Arc<Mutex<Engine>>, api: &SharedApi, notif_id: &str, sender: &str) {
     // Evaluate conditions against a quick snapshot, then drop the engine lock
     // before any network call.
-    let (instance, message_slot) = {
+    enum Action {
+        Accept { instance: String, message_slot: Option<u32> },
+        Decline { slot: u32 },
+        Ignore,
+    }
+
+    let action = {
         let g = engine.lock().unwrap();
         let aa = &g.config.vrchat.auto_accept;
-        if !aa.enabled {
-            return;
+        // The feature is "active" (handling requests) only when enabled and, if
+        // gated, while sleeping. When inactive we leave requests to the user.
+        if !aa.enabled || (aa.only_when_sleep && !g.state.sleep_phase.is_active()) {
+            Action::Ignore
+        } else {
+            let listed = aa.player_ids.iter().any(|id| id == sender);
+            let listed_ok = match aa.list_mode {
+                ListMode::Whitelist => listed,
+                ListMode::Blacklist => !listed,
+            };
+            let under_limit = !aa.max_players_enabled || g.state.player_count < aa.max_players;
+            if listed_ok && under_limit {
+                match g.vrchat_instance.clone() {
+                    Some(instance) => {
+                        let slot = aa.invite_message_enabled.then_some(aa.invite_message_slot);
+                        Action::Accept { instance, message_slot: slot }
+                    }
+                    None => {
+                        log::warn!("auto-accept: no current instance known yet; skipping");
+                        Action::Ignore
+                    }
+                }
+            } else if aa.decline_message_enabled {
+                Action::Decline { slot: aa.decline_message_slot }
+            } else {
+                Action::Ignore
+            }
         }
-        if aa.only_when_sleep && !g.state.sleep_phase.is_active() {
-            return;
-        }
-        if aa.max_players_enabled && g.state.player_count >= aa.max_players {
-            log::info!("auto-accept: world at/over player limit, ignoring request from {sender}");
-            return;
-        }
-        let listed = aa.player_ids.iter().any(|id| id == sender);
-        let allowed = match aa.list_mode {
-            ListMode::Whitelist => listed,
-            ListMode::Blacklist => !listed,
-        };
-        if !allowed {
-            return;
-        }
-        let slot = aa.invite_message_enabled.then_some(aa.invite_message_slot);
-        (g.vrchat_instance.clone(), slot)
     };
-    let Some(instance) = instance else {
-        log::warn!("auto-accept: no current instance known yet; skipping");
-        return;
-    };
+
     let mut a = api.lock().unwrap();
-    if a.invite_user(sender, &instance, message_slot) {
-        a.hide_notification(notif_id);
-        log::info!("auto-accepted invite request from {sender}");
+    match action {
+        Action::Accept { instance, message_slot } => {
+            if a.invite_user(sender, &instance, message_slot) {
+                a.hide_notification(notif_id);
+                log::info!("auto-accepted invite request from {sender}");
+            }
+        }
+        Action::Decline { slot } => {
+            if a.respond_invite(notif_id, slot) {
+                a.hide_notification(notif_id);
+                log::info!("declined invite request from {sender} with a message");
+            }
+        }
+        Action::Ignore => {}
     }
 }
 

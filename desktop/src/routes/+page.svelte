@@ -14,6 +14,7 @@
   import Account from "$lib/views/settings/Account.svelte";
   import Schedule from "$lib/views/settings/Schedule.svelte";
   import SleepDetection from "$lib/views/settings/SleepDetection.svelte";
+  import Commands from "$lib/views/settings/Commands.svelte";
   import General from "$lib/views/settings/General.svelte";
 
   interface Section {
@@ -46,6 +47,7 @@
         { id: "general", label: "General" },
         { id: "schedule", label: "Sleep Schedule" },
         { id: "detection", label: "Sleep Detection" },
+        { id: "commands", label: "Commands" },
         { id: "account", label: "VRChat Account" },
       ],
     },
@@ -98,6 +100,8 @@
               <Schedule />
             {:else if sub === "detection"}
               <SleepDetection />
+            {:else if sub === "commands"}
+              <Commands />
             {:else}
               <General />
             {/if}

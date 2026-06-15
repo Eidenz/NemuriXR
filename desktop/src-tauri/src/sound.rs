@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 
 const JOIN_OGG: &[u8] = include_bytes!("../sounds/join.ogg");
 const LEAVE_OGG: &[u8] = include_bytes!("../sounds/leave.ogg");
+const ALARM_OGG: &[u8] = include_bytes!("../sounds/alarm.ogg");
 
 fn cache_dir() -> PathBuf {
     let base = std::env::var("XDG_CACHE_HOME")
@@ -21,6 +22,7 @@ fn default_path(kind: &str) -> PathBuf {
     let _ = std::fs::create_dir_all(&dir);
     let (name, bytes): (&str, &[u8]) = match kind {
         "leave" => ("leave.ogg", LEAVE_OGG),
+        "alarm" => ("alarm.ogg", ALARM_OGG),
         _ => ("join.ogg", JOIN_OGG),
     };
     let path = dir.join(name);

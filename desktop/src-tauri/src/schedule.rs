@@ -19,29 +19,51 @@ fn run(engine: Arc<Mutex<Engine>>) {
     let mut prev: Option<u32> = None;
     loop {
         let now = local_minutes();
-        let (enabled, sleep_at, wake_at) = {
+        // Auto-sleep and auto-wake are independent: you can have a gentle wake-up
+        // without enabling automatic sleep.
+        let (auto_sleep, sleep_at, auto_wake, wake_at) = {
             let g = engine.lock().unwrap();
             let s = &g.config.sleep;
-            (s.schedule_enabled, parse_hhmm(&s.sleep_at), parse_hhmm(&s.wake_at))
+            (s.schedule_enabled, parse_hhmm(&s.sleep_at), s.wake.enabled, parse_hhmm(&s.wake_at))
         };
-        if enabled {
-            if let Some(p) = prev {
+        if let Some(p) = prev {
+            if auto_sleep {
                 if let Some(t) = sleep_at {
                     if crossed(p, now, t) {
                         log::info!("schedule: sleep at {:02}:{:02}", t / 60, t % 60);
                         engine.lock().unwrap().set_phase(SleepPhase::Sleep);
                     }
                 }
+            }
+            if auto_wake {
                 if let Some(t) = wake_at {
                     if crossed(p, now, t) {
                         log::info!("schedule: wake at {:02}:{:02}", t / 60, t % 60);
-                        engine.lock().unwrap().set_phase(SleepPhase::Awake);
+                        wake_up(&engine);
                     }
                 }
             }
         }
         prev = Some(now);
         std::thread::sleep(TICK);
+    }
+}
+
+/// Scheduled gentle wake-up: ramp brightness up (sunrise) + restore, then play
+/// the alarm after the sunrise finishes — but only if you're still awake (didn't
+/// go back to sleep). Only called when auto-wake is on.
+fn wake_up(engine: &Arc<Mutex<Engine>>) {
+    let wake = { engine.lock().unwrap().config.sleep.wake.clone() };
+    engine.lock().unwrap().begin_wake(&wake);
+    if wake.alarm_enabled {
+        let engine = engine.clone();
+        let delay = Duration::from_secs(wake.sunrise_minutes as u64 * 60);
+        std::thread::spawn(move || {
+            std::thread::sleep(delay);
+            if engine.lock().unwrap().state.sleep_phase == SleepPhase::Awake {
+                crate::sound::play_notification("alarm", &wake.alarm_sound);
+            }
+        });
     }
 }
 

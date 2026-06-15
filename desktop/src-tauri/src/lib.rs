@@ -14,7 +14,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
 
-use nemurixr_core::config::{AudioLevel, BrightnessLevel};
+use nemurixr_core::config::{AudioLevel, BrightnessLevel, WakeConfig};
 use nemurixr_core::ipc::{self, Request, Response};
 use nemurixr_core::{Config, SleepPhase, State};
 
@@ -159,7 +159,52 @@ impl Engine {
             self.apply_audio(level);
         }
         self.send_osc(phase);
+        self.run_command(phase);
         // Future: VRChat status automations also fire here.
+    }
+
+    /// Run the user's command for `phase` (via `sh -c`), if enabled and non-empty.
+    /// Spawned on a thread so a slow script never blocks the engine.
+    fn run_command(&self, phase: SleepPhase) {
+        if !self.config.commands.enabled {
+            return;
+        }
+        let cmd = match phase {
+            SleepPhase::Awake => &self.config.commands.on_wake,
+            SleepPhase::Prepare => &self.config.commands.on_prepare,
+            SleepPhase::Sleep => &self.config.commands.on_sleep,
+        }
+        .trim()
+        .to_string();
+        if cmd.is_empty() {
+            return;
+        }
+        log::info!("running {phase:?} command");
+        std::thread::spawn(move || match std::process::Command::new("sh").arg("-c").arg(&cmd).spawn() {
+            Ok(mut child) => {
+                let _ = child.wait();
+            }
+            Err(e) => log::warn!("command failed to start: {e}"),
+        });
+    }
+
+    /// Gentle scheduled wake: ramp brightness up to the Awake level over the
+    /// sunrise time, and restore audio + OSC + command. The alarm sound is fired
+    /// by the scheduler once the sunrise finishes.
+    fn begin_wake(&mut self, wake: &WakeConfig) {
+        self.state.sleep_phase = SleepPhase::Awake;
+        log::info!("wake-up routine: {}-min sunrise", wake.sunrise_minutes);
+        if self.config.brightness.enabled {
+            let mut level = self.brightness_level(SleepPhase::Awake);
+            level.transition_seconds = wake.sunrise_minutes.saturating_mul(60);
+            self.fade_brightness(level);
+        }
+        if self.config.audio.enabled {
+            let level = self.audio_level(SleepPhase::Awake);
+            self.apply_audio(level);
+        }
+        self.send_osc(SleepPhase::Awake);
+        self.run_command(SleepPhase::Awake);
     }
 
     /// A state snapshot with the derived `overlay_running` flag filled in.
@@ -257,6 +302,19 @@ fn apply_audio(engine: tauri::State<Shared>, which: String) {
     g.apply_audio(level);
 }
 
+/// Run a phase's command now (preview). `which` is awake/prepare/sleep.
+#[tauri::command]
+fn test_command(engine: tauri::State<Shared>, which: String) {
+    engine.lock().unwrap().run_command(phase_from_str(&which));
+}
+
+/// Preview the wake-up alarm sound (custom file if set, else the default chime).
+#[tauri::command]
+fn test_alarm(engine: tauri::State<Shared>) {
+    let custom = engine.lock().unwrap().config.sleep.wake.alarm_sound.clone();
+    sound::play_notification("alarm", &custom);
+}
+
 /// Preview a notification sound. `kind` is "join" or "leave".
 #[tauri::command]
 fn test_sound(engine: tauri::State<Shared>, kind: String) {
@@ -335,20 +393,21 @@ async fn vrchat_friends(vrc: tauri::State<'_, SharedApi>) -> Result<Vec<Friend>,
     .map_err(|e| e.to_string())
 }
 
-/// The user's invite-message templates, for the auto-accept message picker.
+/// Message templates for the picker. `kind` is "message" (accept) or
+/// "requestResponse" (decline).
 #[tauri::command]
-async fn vrchat_invite_messages(vrc: tauri::State<'_, SharedApi>) -> Result<Vec<InviteMessage>, String> {
+async fn vrchat_messages(vrc: tauri::State<'_, SharedApi>, kind: String) -> Result<Vec<InviteMessage>, String> {
     let api = vrc.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().invite_messages())
+    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().messages(&kind))
         .await
         .map_err(|e| e.to_string())?
 }
 
-/// Edit one invite-message slot (rate-limited by VRChat to ~once/hour/slot).
+/// Edit one message slot (rate-limited by VRChat to ~once/hour/slot).
 #[tauri::command]
-async fn vrchat_update_invite_message(vrc: tauri::State<'_, SharedApi>, slot: u32, text: String) -> Result<Vec<InviteMessage>, String> {
+async fn vrchat_update_message(vrc: tauri::State<'_, SharedApi>, kind: String, slot: u32, text: String) -> Result<Vec<InviteMessage>, String> {
     let api = vrc.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().update_invite_message(slot, &text))
+    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().update_message(&kind, slot, &text))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -416,14 +475,16 @@ pub fn run() {
             send_osc,
             apply_audio,
             test_sound,
+            test_command,
+            test_alarm,
             launch_overlay,
             vrchat_login,
             vrchat_verify_2fa,
             vrchat_logout,
             vrchat_status,
             vrchat_friends,
-            vrchat_invite_messages,
-            vrchat_update_invite_message
+            vrchat_messages,
+            vrchat_update_message
         ])
         .setup(|app| {
             // System tray: left-click opens the window; the menu has Open + Quit.

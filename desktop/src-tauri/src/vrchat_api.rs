@@ -145,15 +145,39 @@ impl Api {
         }
     }
 
-    /// Fetch the user's 12 invite-message templates (slots 0–11).
-    pub fn invite_messages(&mut self) -> Result<Vec<InviteMessage>, String> {
+    /// Decline an invite request by responding with one of the request-response
+    /// message templates.
+    pub fn respond_invite(&mut self, notification_id: &str, slot: u32) -> bool {
+        if !self.limiter.allow("invite", 12) {
+            log::warn!("VRChat: invite response rate-limited, skipping");
+            return false;
+        }
+        match self
+            .client
+            .post(format!("{API}/invite/{notification_id}/response"))
+            .header("Cookie", self.cookie_header())
+            .json(&serde_json::json!({ "responseSlot": slot }))
+            .send()
+        {
+            Ok(r) => r.status().is_success(),
+            Err(e) => {
+                log::warn!("VRChat invite response failed: {e}");
+                false
+            }
+        }
+    }
+
+    /// Fetch a message-template list. `kind` is "message" (invite messages) or
+    /// "requestResponse" (decline messages). 12 slots (0–11).
+    pub fn messages(&mut self, kind: &str) -> Result<Vec<InviteMessage>, String> {
+        let kind = message_kind(kind);
         let Some(uid) = self.user_id.clone() else { return Err("Not signed in".into()) };
         if !self.limiter.allow("messages", 6) {
             return Err("Too many requests; try again shortly".into());
         }
         let resp = self
             .client
-            .get(format!("{API}/message/{uid}/message"))
+            .get(format!("{API}/message/{uid}/{kind}"))
             .header("Cookie", self.cookie_header())
             .send()
             .map_err(net_error)?;
@@ -164,16 +188,17 @@ impl Api {
         Ok(parse_messages(body))
     }
 
-    /// Update an invite-message slot's text. VRChat rate-limits this to roughly
-    /// once per hour per slot. Returns the refreshed list on success.
-    pub fn update_invite_message(&mut self, slot: u32, text: &str) -> Result<Vec<InviteMessage>, String> {
+    /// Update a message slot's text. VRChat rate-limits this to roughly once per
+    /// hour per slot. Returns the refreshed list on success.
+    pub fn update_message(&mut self, kind: &str, slot: u32, text: &str) -> Result<Vec<InviteMessage>, String> {
+        let kind = message_kind(kind);
         let Some(uid) = self.user_id.clone() else { return Err("Not signed in".into()) };
         if !self.limiter.allow("messages", 6) {
             return Err("Too many requests; try again shortly".into());
         }
         let resp = self
             .client
-            .put(format!("{API}/message/{uid}/message/{slot}"))
+            .put(format!("{API}/message/{uid}/{kind}/{slot}"))
             .header("Cookie", self.cookie_header())
             .json(&serde_json::json!({ "message": text }))
             .send()
@@ -408,6 +433,14 @@ impl Api {
 
 fn net_error(e: reqwest::Error) -> String {
     format!("Network error: {e}")
+}
+
+/// Whitelist the message type so it can't be turned into an arbitrary path.
+fn message_kind(kind: &str) -> &'static str {
+    match kind {
+        "requestResponse" => "requestResponse",
+        _ => "message",
+    }
 }
 
 /// Parse invite messages from either the list (GET) or single-slot (PUT) shape.

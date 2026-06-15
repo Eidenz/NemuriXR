@@ -40,6 +40,19 @@ export interface SleepConfig {
   detection_minutes: number;
   detection_poses: number[][]; // calibrated head-local gravity vectors
   detection_pose_tolerance: number; // degrees
+  wake: WakeConfig;
+}
+export interface WakeConfig {
+  enabled: boolean;
+  sunrise_minutes: number;
+  alarm_enabled: boolean;
+  alarm_sound: string;
+}
+export interface CommandsConfig {
+  enabled: boolean;
+  on_wake: string;
+  on_prepare: string;
+  on_sleep: string;
 }
 export interface AutoAcceptConfig {
   enabled: boolean;
@@ -50,6 +63,8 @@ export interface AutoAcceptConfig {
   max_players: number;
   invite_message_enabled: boolean;
   invite_message_slot: number;
+  decline_message_enabled: boolean;
+  decline_message_slot: number;
 }
 export interface JoinNotifyConfig {
   enabled: boolean;
@@ -97,6 +112,7 @@ export interface Config {
   audio: AudioConfig;
   vrchat: VrchatConfig;
   osc: OscConfig;
+  commands: CommandsConfig;
 }
 
 export type LoginOutcome =

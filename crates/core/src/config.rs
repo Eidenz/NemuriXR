@@ -20,6 +20,7 @@ pub struct Config {
     pub audio: AudioConfig,
     pub vrchat: VrchatConfig,
     pub osc: OscConfig,
+    pub commands: CommandsConfig,
 
     // Never sent over the wire; defaults to the standard path when a config is
     // deserialized (e.g. received over IPC) so `save()` always has a target.
@@ -60,6 +61,23 @@ pub struct SleepConfig {
     pub detection_poses: Vec<[f32; 3]>,
     /// Max angle (degrees) from a calibrated pose that still counts as "in pose".
     pub detection_pose_tolerance: u32,
+
+    /// Gentle wake-up routine at the scheduled wake time.
+    pub wake: WakeConfig,
+}
+
+/// A gradual wake-up: ramp brightness back up (a "sunrise") and optionally play
+/// an alarm sound at the end. Triggered by the schedule's wake time.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WakeConfig {
+    pub enabled: bool,
+    /// Minutes over which to ramp brightness up to the Awake level.
+    pub sunrise_minutes: u32,
+    /// Play an alarm sound once the sunrise finishes.
+    pub alarm_enabled: bool,
+    /// Alarm sound file ("" = bundled default chime).
+    pub alarm_sound: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -92,6 +110,19 @@ pub struct BrightnessLevel {
     pub fan: u8,
     /// Seconds to fade into this level (0 = instant).
     pub transition_seconds: u32,
+}
+
+// ---- Commands (run a script/app per phase) --------------------------------
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct CommandsConfig {
+    /// Run the per-phase commands on phase transitions.
+    pub enabled: bool,
+    /// Shell command lines (run via `sh -c`); empty = nothing for that phase.
+    pub on_wake: String,
+    pub on_prepare: String,
+    pub on_sleep: String,
 }
 
 // ---- Audio volume ---------------------------------------------------------
@@ -158,6 +189,10 @@ pub struct AutoAcceptConfig {
     pub invite_message_enabled: bool,
     /// Which invite-message slot (0–11) to send.
     pub invite_message_slot: u32,
+    /// Send a decline message to requests that are NOT auto-accepted.
+    pub decline_message_enabled: bool,
+    /// Which request-response slot (0–11) to send when declining.
+    pub decline_message_slot: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -241,7 +276,14 @@ impl Default for SleepConfig {
             detection_minutes: 15,
             detection_poses: Vec::new(),
             detection_pose_tolerance: 30,
+            wake: WakeConfig::default(),
         }
+    }
+}
+
+impl Default for WakeConfig {
+    fn default() -> Self {
+        Self { enabled: false, sunrise_minutes: 10, alarm_enabled: false, alarm_sound: String::new() }
     }
 }
 
@@ -273,6 +315,8 @@ impl Default for AutoAcceptConfig {
             max_players: 2,
             invite_message_enabled: false,
             invite_message_slot: 0,
+            decline_message_enabled: false,
+            decline_message_slot: 0,
         }
     }
 }
@@ -341,6 +385,7 @@ impl Default for Config {
             audio: AudioConfig::default(),
             vrchat: VrchatConfig::default(),
             osc: OscConfig::default(),
+            commands: CommandsConfig::default(),
             path: config_path(),
         }
     }
