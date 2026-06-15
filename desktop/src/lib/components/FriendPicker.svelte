@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { app, cacheFriendName } from "$lib/state.svelte";
   import type { Friend } from "$lib/types";
 
   interface Props {
@@ -15,7 +16,8 @@
   let query = $state("");
   let open = $state(false);
 
-  const nameOf = (id: string) => friends.find((f) => f.id === id)?.display_name ?? id;
+  // Friends list first, then the persisted name cache, then the raw id.
+  const nameOf = (id: string) => friends.find((f) => f.id === id)?.display_name ?? app.friendNames[id] ?? id;
 
   const matches = $derived(
     query.trim()
@@ -41,6 +43,7 @@
   function add(f: Friend) {
     if (!ids.includes(f.id)) {
       ids.push(f.id);
+      cacheFriendName(f.id, f.display_name);
       onchange?.();
     }
     query = "";
@@ -89,6 +92,9 @@
           <div class="menu glass"><div class="none">No matching friends — use ↻ to re-fetch</div></div>
         {/if}
       </div>
+      {#if loading}
+        <span class="spinner" aria-label="Loading friends"></span>
+      {/if}
       <button class="link" onclick={refresh} disabled={loading} title="Re-fetch friends">↻</button>
       <button class="link" onclick={() => ((searching = false), (query = ""))}>Done</button>
     </div>
@@ -210,5 +216,19 @@
   }
   .link:disabled {
     opacity: 0.5;
+  }
+  .spinner {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    border: 2px solid hsl(var(--glass-border) / 0.2);
+    border-top-color: hsl(var(--primary));
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

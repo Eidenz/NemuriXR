@@ -231,37 +231,59 @@ fn test_sound(engine: tauri::State<Shared>, kind: String) {
 
 // --- VRChat account (auth) ---
 
+// All of these touch the network and/or the keyring, so they run async via
+// spawn_blocking — a sync command would block the main (UI) thread.
 #[tauri::command]
-fn vrchat_login(vrc: tauri::State<SharedApi>, username: String, password: String) -> LoginOutcome {
-    vrc.lock().unwrap().login(&username, &password)
+async fn vrchat_login(vrc: tauri::State<'_, SharedApi>, username: String, password: String) -> Result<LoginOutcome, String> {
+    let api = vrc.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().login(&username, &password))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn vrchat_verify_2fa(vrc: tauri::State<SharedApi>, method: String, code: String) -> LoginOutcome {
-    vrc.lock().unwrap().verify_2fa(&method, &code)
+async fn vrchat_verify_2fa(vrc: tauri::State<'_, SharedApi>, method: String, code: String) -> Result<LoginOutcome, String> {
+    let api = vrc.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().verify_2fa(&method, &code))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn vrchat_logout(vrc: tauri::State<SharedApi>) -> LoginStatus {
-    let mut a = vrc.lock().unwrap();
-    a.logout();
-    a.login_status()
+async fn vrchat_logout(vrc: tauri::State<'_, SharedApi>) -> Result<LoginStatus, String> {
+    let api = vrc.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut a = api.lock().unwrap();
+        a.logout();
+        a.login_status()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn vrchat_status(vrc: tauri::State<SharedApi>) -> LoginStatus {
-    vrc.lock().unwrap().login_status()
+async fn vrchat_status(vrc: tauri::State<'_, SharedApi>) -> Result<LoginStatus, String> {
+    let api = vrc.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().login_status())
+        .await
+        .map_err(|e| e.to_string())
 }
 
-/// Friends list for the auto-accept whitelist picker. Grabs the client + cookie
-/// under a brief lock, then fetches all pages without holding it.
+/// Friends list for the auto-accept whitelist picker. Async + spawn_blocking so
+/// the multi-page fetch runs off the main thread (no UI freeze); grabs the
+/// client + cookie under a brief lock, then fetches all pages without holding it.
 #[tauri::command]
-fn vrchat_friends(vrc: tauri::State<SharedApi>) -> Vec<Friend> {
-    let req = vrc.lock().unwrap().friends_request();
-    match req {
-        Some((client, cookie)) => vrchat_api::fetch_friends(&client, &cookie),
-        None => Vec::new(),
-    }
+async fn vrchat_friends(vrc: tauri::State<'_, SharedApi>) -> Result<Vec<Friend>, String> {
+    let api = vrc.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let req = api.lock().unwrap().friends_request();
+        match req {
+            Some((client, cookie)) => vrchat_api::fetch_friends(&client, &cookie),
+            None => Vec::new(),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

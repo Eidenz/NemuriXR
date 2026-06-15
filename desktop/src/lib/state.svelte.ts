@@ -3,19 +3,41 @@
 import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends } from "./api";
 import type { Config, Friend, LoginStatus, SleepPhase, State } from "./types";
 
+const ls = typeof localStorage !== "undefined" ? localStorage : null;
+const NAMES_KEY = "nemurixr.friendNames";
+function loadNames(): Record<string, string> {
+  try {
+    return JSON.parse(ls?.getItem(NAMES_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
 export const app = $state<{
   config: Config | null;
   state: State | null;
   connected: boolean;
   vrchatLogin: LoginStatus;
   vrchatFriends: Friend[];
+  /** id → display name cache, so whitelisted friends show names without a fetch. */
+  friendNames: Record<string, string>;
 }>({
   config: null,
   state: null,
   connected: false,
   vrchatLogin: { logged_in: false, username: null },
   vrchatFriends: [],
+  friendNames: loadNames(),
 });
+
+function persistNames() {
+  ls?.setItem(NAMES_KEY, JSON.stringify(app.friendNames));
+}
+/** Remember a friend's display name (persisted) for the whitelist chips. */
+export function cacheFriendName(id: string, name: string) {
+  app.friendNames[id] = name;
+  persistNames();
+}
 
 let friendsLoaded = false;
 /** Fetch the friends list once (cached across tab switches); `force` re-fetches. */
@@ -24,6 +46,8 @@ export async function loadVrchatFriends(force = false) {
   try {
     app.vrchatFriends = await vrchatFriends();
     friendsLoaded = true;
+    for (const f of app.vrchatFriends) app.friendNames[f.id] = f.display_name;
+    persistNames();
   } catch (e) {
     console.error("vrchatFriends failed", e);
   }
