@@ -17,8 +17,11 @@
 
 <style>
   .sw {
+    position: relative;
     width: 52px;
     height: 30px;
+    padding: 0;
+    border: 0;
     border-radius: var(--radius-pill);
     background: hsl(var(--glass-border) / 0.14);
     transition: background 0.18s var(--ease);
@@ -28,16 +31,18 @@
     background: hsl(var(--primary));
   }
   .knob {
-    display: block;
+    position: absolute;
+    top: 50%;
+    left: 4px;
     width: 22px;
     height: 22px;
-    margin: 4px;
     border-radius: 50%;
     background: #fff;
-    transform: translateX(0);
-    transition: transform 0.18s var(--ease);
+    transform: translateY(-50%);
+    transition: left 0.18s var(--ease);
   }
+  /* 52 − 22 − 4 = 26px from the left edge when on */
   .sw.on .knob {
-    transform: translateX(22px);
+    left: 26px;
   }
 </style>

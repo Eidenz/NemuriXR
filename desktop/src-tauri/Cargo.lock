@@ -803,6 +803,18 @@ dependencies = [
 
 [[package]]
 name = "dlopen2"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e1297103d2bbaea85724fcee6294c2d50b1081f9ad47d0f6f6f61eda65315a6"
+dependencies = [
+ "dlopen2_derive",
+ "libc",
+ "once_cell",
+ "winapi",
+]
+
+[[package]]
+name = "dlopen2"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e2c5bd4158e66d1e215c49b837e11d62f3267b30c92f1d171c4d3105e3dc4d4"
@@ -1038,6 +1050,12 @@ name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
+
+[[package]]
+name = "flagset"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
 
 [[package]]
 name = "flate2"
@@ -2026,6 +2044,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "libmonado"
+version = "1.6.0"
+source = "git+https://github.com/wayvr-org/libmonado-rs.git?rev=6f66b26930c24a8a2fc57ddcd85704784894c750#6f66b26930c24a8a2fc57ddcd85704784894c750"
+dependencies = [
+ "dlopen2 0.7.0",
+ "flagset",
+ "libc",
+ "mint",
+ "semver",
+ "serde",
+ "serde_json",
+ "xdg",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2104,6 +2137,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mint"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e53debba6bda7a793e5f99b8dacf19e626084f525f7829104ba9898f367d85ff"
+
+[[package]]
 name = "mio"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2174,6 +2213,8 @@ name = "nemurixr-desktop"
 version = "0.1.0"
 dependencies = [
  "env_logger",
+ "libc",
+ "libmonado",
  "log",
  "nemurixr-core",
  "serde",
@@ -3413,7 +3454,7 @@ dependencies = [
  "crossbeam-channel",
  "dbus",
  "dispatch2",
- "dlopen2",
+ "dlopen2 0.8.2",
  "dpi",
  "gdkwayland-sys",
  "gdkx11-sys",
@@ -5042,6 +5083,12 @@ dependencies = [
  "once_cell",
  "pkg-config",
 ]
+
+[[package]]
+name = "xdg"
+version = "2.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213b7324336b53d2414b2db8537e56544d981803139155afa84f76eeebb7a546"
 
 [[package]]
 name = "yoke"

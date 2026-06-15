@@ -15,6 +15,7 @@ use tauri::{Manager, WindowEvent};
 use nemurixr_core::ipc::{self, Request, Response};
 use nemurixr_core::{Config, State};
 
+mod brightness;
 mod sound;
 mod vrchat;
 
@@ -24,11 +25,24 @@ pub(crate) struct Engine {
     state: State,
     /// Last time the VR overlay talked to us (for the "overlay connected" status).
     last_overlay_seen: Option<Instant>,
+    brightness: brightness::Backend,
 }
 
 impl Engine {
     fn new() -> Self {
-        Engine { config: Config::load(), state: State::default(), last_overlay_seen: None }
+        let backend = brightness::detect();
+        let mut state = State::default();
+        state.brightness_backend = brightness::name(backend);
+        log::info!("brightness backend: {}", brightness::name(backend).unwrap_or_else(|| "none".into()));
+        Engine { config: Config::load(), state, last_overlay_seen: None, brightness: backend }
+    }
+
+    /// Re-detect the backend and apply the sleep or wake brightness/fan level.
+    fn apply_brightness_level(&mut self, sleeping: bool) {
+        self.brightness = brightness::detect();
+        self.state.brightness_backend = brightness::name(self.brightness);
+        let lvl = if sleeping { self.config.brightness.on_sleep } else { self.config.brightness.on_wake };
+        brightness::apply(self.brightness, lvl.brightness, lvl.fan);
     }
 
     fn apply_config(&mut self, config: Config) {
@@ -41,7 +55,10 @@ impl Engine {
         if self.state.sleep_active != active {
             self.state.sleep_active = active;
             log::info!("sleep mode -> {active}");
-            // Later milestones fire the sleep/wake automations here.
+            if self.config.brightness.enabled {
+                self.apply_brightness_level(active);
+            }
+            // Future: OSC + VRChat status automations also fire here.
         }
     }
 
@@ -103,6 +120,12 @@ fn set_sleep(engine: tauri::State<Shared>, active: bool) {
     engine.lock().unwrap().set_sleep(active);
 }
 
+/// Apply a brightness/fan level now (preview). `which` is "sleep" or "wake".
+#[tauri::command]
+fn apply_brightness(engine: tauri::State<Shared>, which: String) {
+    engine.lock().unwrap().apply_brightness_level(which == "sleep");
+}
+
 /// Preview a notification sound. `kind` is "join" or "leave".
 #[tauri::command]
 fn test_sound(engine: tauri::State<Shared>, kind: String) {
@@ -153,7 +176,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(engine)
-        .invoke_handler(tauri::generate_handler![get_config, set_config, get_state, set_sleep, test_sound])
+        .invoke_handler(tauri::generate_handler![
+            get_config,
+            set_config,
+            get_state,
+            set_sleep,
+            apply_brightness,
+            test_sound
+        ])
         .setup(|app| {
             // System tray: left-click opens the window; the menu has Open + Quit.
             let open = MenuItem::with_id(app, "open", "Open NemuriXR", true, None::<&str>)?;

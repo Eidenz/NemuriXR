@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app, save, saveSoon } from "$lib/state.svelte";
+  import { applyBrightness } from "$lib/api";
   import GlassCard from "$lib/components/GlassCard.svelte";
   import Toggle from "$lib/components/Toggle.svelte";
   import Slider from "$lib/components/Slider.svelte";
@@ -25,12 +26,14 @@
           <Slider label="Brightness" suffix="%" bind:value={app.config.brightness.on_sleep.brightness} onchange={saveSoon} />
           <Slider label="Fan speed" suffix="%" disabled={!beyond} bind:value={app.config.brightness.on_sleep.fan} onchange={saveSoon} />
         </div>
+        <button class="btn tonal state-layer preview" onclick={() => applyBrightness("sleep")}>Preview on headset</button>
       </GlassCard>
       <GlassCard title="When I wake up">
         <div class="sliders">
           <Slider label="Brightness" suffix="%" bind:value={app.config.brightness.on_wake.brightness} onchange={saveSoon} />
           <Slider label="Fan speed" suffix="%" disabled={!beyond} bind:value={app.config.brightness.on_wake.fan} onchange={saveSoon} />
         </div>
+        <button class="btn tonal state-layer preview" onclick={() => applyBrightness("wake")}>Preview on headset</button>
       </GlassCard>
     </div>
 
@@ -81,6 +84,12 @@
     display: flex;
     flex-direction: column;
     gap: 22px;
+  }
+  .preview {
+    margin-top: 20px;
+    height: 34px;
+    padding: 0 16px;
+    font-size: 13px;
   }
   .note {
     color: hsl(var(--muted-foreground));
