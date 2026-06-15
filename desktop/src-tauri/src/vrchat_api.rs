@@ -48,6 +48,17 @@ pub struct Friend {
     pub display_name: String,
 }
 
+/// One of the user's 12 invite-message templates (slots 0–11).
+#[derive(Serialize, Clone)]
+pub struct InviteMessage {
+    pub slot: u32,
+    pub message: String,
+    /// False while the slot is in its edit cooldown.
+    pub can_update: bool,
+    /// Minutes left before this slot can be edited again.
+    pub cooldown_minutes: u32,
+}
+
 /// Sliding-window rate limiter. VRChat permits API use but dislikes spam, so
 /// every write is capped per-minute (plus a global cap). Mirrors OyasumiVR's
 /// limits. Our triggers are event-driven (websocket + log), so this is mostly a
@@ -106,7 +117,8 @@ impl Api {
     }
 
     /// Accept an invite request by inviting the user into our instance.
-    pub fn invite_user(&mut self, user_id: &str, instance_id: &str) -> bool {
+    /// `message_slot` optionally attaches one of the user's invite messages.
+    pub fn invite_user(&mut self, user_id: &str, instance_id: &str, message_slot: Option<u32>) -> bool {
         if self.user_id.is_none() {
             return false;
         }
@@ -114,11 +126,15 @@ impl Api {
             log::warn!("VRChat: invite rate-limited, skipping");
             return false;
         }
+        let mut body = serde_json::json!({ "instanceId": instance_id });
+        if let Some(slot) = message_slot {
+            body["messageSlot"] = serde_json::json!(slot);
+        }
         match self
             .client
             .post(format!("{API}/invite/{user_id}"))
             .header("Cookie", self.cookie_header())
-            .json(&serde_json::json!({ "instanceId": instance_id }))
+            .json(&body)
             .send()
         {
             Ok(r) => r.status().is_success(),
@@ -127,6 +143,56 @@ impl Api {
                 false
             }
         }
+    }
+
+    /// Fetch the user's 12 invite-message templates (slots 0–11).
+    pub fn invite_messages(&mut self) -> Result<Vec<InviteMessage>, String> {
+        let Some(uid) = self.user_id.clone() else { return Err("Not signed in".into()) };
+        if !self.limiter.allow("messages", 6) {
+            return Err("Too many requests; try again shortly".into());
+        }
+        let resp = self
+            .client
+            .get(format!("{API}/message/{uid}/message"))
+            .header("Cookie", self.cookie_header())
+            .send()
+            .map_err(net_error)?;
+        if !resp.status().is_success() {
+            return Err(format!("VRChat returned {}", resp.status()));
+        }
+        let body: Value = resp.json().map_err(net_error)?;
+        Ok(parse_messages(body))
+    }
+
+    /// Update an invite-message slot's text. VRChat rate-limits this to roughly
+    /// once per hour per slot. Returns the refreshed list on success.
+    pub fn update_invite_message(&mut self, slot: u32, text: &str) -> Result<Vec<InviteMessage>, String> {
+        let Some(uid) = self.user_id.clone() else { return Err("Not signed in".into()) };
+        if !self.limiter.allow("messages", 6) {
+            return Err("Too many requests; try again shortly".into());
+        }
+        let resp = self
+            .client
+            .put(format!("{API}/message/{uid}/message/{slot}"))
+            .header("Cookie", self.cookie_header())
+            .json(&serde_json::json!({ "message": text }))
+            .send()
+            .map_err(net_error)?;
+        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return Err("VRChat only allows editing a message once per hour. Try again later.".into());
+        }
+        if !resp.status().is_success() {
+            let body: Value = resp.json().unwrap_or(Value::Null);
+            let msg = body
+                .get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(Value::as_str)
+                .unwrap_or("Couldn't update the message")
+                .to_string();
+            return Err(msg);
+        }
+        let body: Value = resp.json().map_err(net_error)?;
+        Ok(parse_messages(body))
     }
 
     /// Hide (dismiss) a notification after handling it.
@@ -342,6 +408,29 @@ impl Api {
 
 fn net_error(e: reqwest::Error) -> String {
     format!("Network error: {e}")
+}
+
+/// Parse invite messages from either the list (GET) or single-slot (PUT) shape.
+fn parse_messages(v: Value) -> Vec<InviteMessage> {
+    let items = match v {
+        Value::Array(a) => a,
+        obj @ Value::Object(_) => vec![obj],
+        _ => Vec::new(),
+    };
+    let mut out: Vec<InviteMessage> = items
+        .iter()
+        .filter_map(|m| {
+            let slot = m.get("slot").and_then(Value::as_u64)? as u32;
+            Some(InviteMessage {
+                slot,
+                message: m.get("message").and_then(Value::as_str).unwrap_or("").to_string(),
+                can_update: m.get("canBeUpdated").and_then(Value::as_bool).unwrap_or(true),
+                cooldown_minutes: m.get("remainingCooldownMinutes").and_then(Value::as_u64).unwrap_or(0) as u32,
+            })
+        })
+        .collect();
+    out.sort_by_key(|m| m.slot);
+    out
 }
 
 /// Fetch the full friends list — every page of both the online and offline

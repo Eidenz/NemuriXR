@@ -16,6 +16,18 @@ export interface BrightnessConfig {
   on_prepare: BrightnessLevel;
   on_sleep: BrightnessLevel;
 }
+export interface AudioLevel {
+  set_volume: boolean;
+  volume: number; // 0-100
+  set_mic: boolean;
+  mic_muted: boolean;
+}
+export interface AudioConfig {
+  enabled: boolean;
+  on_wake: AudioLevel;
+  on_prepare: AudioLevel;
+  on_sleep: AudioLevel;
+}
 export interface SleepConfig {
   schedule_enabled: boolean;
   sleep_at: string; // "HH:MM"
@@ -26,6 +38,8 @@ export interface SleepConfig {
   detect_end: string; // "HH:MM"
   detection_sensitivity: Sensitivity;
   detection_minutes: number;
+  detection_poses: number[][]; // calibrated head-local gravity vectors
+  detection_pose_tolerance: number; // degrees
 }
 export interface AutoAcceptConfig {
   enabled: boolean;
@@ -34,6 +48,8 @@ export interface AutoAcceptConfig {
   only_when_sleep: boolean;
   max_players_enabled: boolean;
   max_players: number;
+  invite_message_enabled: boolean;
+  invite_message_slot: number;
 }
 export interface JoinNotifyConfig {
   enabled: boolean;
@@ -78,6 +94,7 @@ export interface Config {
   auto_launch_overlay: boolean;
   sleep: SleepConfig;
   brightness: BrightnessConfig;
+  audio: AudioConfig;
   vrchat: VrchatConfig;
   osc: OscConfig;
 }
@@ -97,6 +114,13 @@ export interface Friend {
   display_name: string;
 }
 
+export interface InviteMessage {
+  slot: number;
+  message: string;
+  can_update: boolean;
+  cooldown_minutes: number;
+}
+
 export interface State {
   sleep_phase: SleepPhase;
   player_count: number;
@@ -104,5 +128,6 @@ export interface State {
   vrchat_status: string | null;
   brightness_backend: string | null;
   osc_target: string | null;
+  audio_target: string | null;
   overlay_running: boolean;
 }

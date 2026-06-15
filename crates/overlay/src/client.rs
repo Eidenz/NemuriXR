@@ -18,6 +18,9 @@ pub struct Detection {
     pub end: String,
     pub sensitivity: Sensitivity,
     pub minutes: u32,
+    /// Calibrated sleep poses (head-local gravity vectors); empty = uncalibrated.
+    pub poses: Vec<[f32; 3]>,
+    pub pose_tolerance: u32,
 }
 
 enum Cmd {
@@ -71,6 +74,8 @@ impl EngineLink {
             end: s.detect_end.clone(),
             sensitivity: s.detection_sensitivity,
             minutes: s.detection_minutes,
+            poses: s.detection_poses.clone(),
+            pose_tolerance: s.detection_pose_tolerance,
         }
     }
 

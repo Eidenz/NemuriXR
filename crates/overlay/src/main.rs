@@ -20,19 +20,22 @@ mod theme;
 mod ui;
 
 use std::env;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use openxr as xr;
 
 use blocker::Blocker;
 use client::{Detection, EngineLink};
-use detector::{Detector, Tick};
-use mathx::locate_pose;
+use detector::{nearest_pose_deg, Detector, Tick};
+use mathx::{gravity_local, locate_pose};
 use nemurixr_core::SleepPhase;
 use overlay::{front_pose, posef, Input, Laser, Panel, TargetId};
 use ui::{build_countdown, build_menu, MenuAction, Screen};
 
 const MENU: TargetId = 0;
+/// Delay between pressing "Capture a pose" and recording it — time to settle in.
+const CALIB_DELAY: Duration = Duration::from_secs(5);
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -92,6 +95,8 @@ fn run() -> Result<()> {
 
     let mut menu_visible = false;
     let mut screen = Screen::Home;
+    // When set, a sleep-pose capture is counting down to this instant.
+    let mut capture_at: Option<Instant> = None;
 
     log::info!("NemuriXR overlay ready. Double-tap A (right) to open the menu; point to interact, grip to move it.");
 
@@ -176,15 +181,25 @@ fn run() -> Result<()> {
 
         blocker.set(pointing_panel && link.block_game_input());
 
+        // Gravity direction in head-local space — yaw-invariant pose descriptor.
+        let g_local = hmd.map(|h| gravity_local(&h.orientation));
+
         // Motion-based sleep detection. Only while awake, connected, and (if a
-        // window is set) inside it; the open menu pauses it. Any controller input
-        // or head movement cancels the countdown; reaching zero enters Sleep.
+        // window is set) inside it; the open menu pauses it. When sleep poses are
+        // calibrated the head must also be near one (else stillness alone arms it).
+        // Any controller input or head movement cancels the countdown; reaching
+        // zero enters Sleep.
         let det = link.detection();
+        let pose_ok = det.poses.is_empty()
+            || g_local
+                .and_then(|g| nearest_pose_deg(g, &det.poses))
+                .is_some_and(|a| a <= det.pose_tolerance as f32);
         let det_active = connected
             && det.enabled
             && phase == SleepPhase::Awake
             && !menu_visible
             && hmd.is_some()
+            && pose_ok
             && within_window(&det);
         let hmd_ref = hmd.unwrap_or(xr::Posef::IDENTITY);
         let mut countdown_secs: Option<u32> = None;
@@ -194,26 +209,66 @@ fn run() -> Result<()> {
             Tick::Idle => {}
         }
 
+        // An in-progress pose capture only makes sense on the calibrate screen.
+        if !menu_visible || screen != Screen::Calibrate {
+            capture_at = None;
+        }
+
         // Render the menu (when open) and forward its actions to the engine.
         let mut menu_quad = None;
         let mut laser_quad = None;
         if menu_visible {
             let clock = chrono::Local::now().format("%H:%M").to_string();
+            let capture_secs = capture_at.map(|t| {
+                let now = Instant::now();
+                if now >= t {
+                    0
+                } else {
+                    (t - now).as_secs() as u32 + 1
+                }
+            });
+            // While a capture counts down, keep the panel in view as the user
+            // moves into their sleeping position.
+            if capture_at.is_some() {
+                if let Some(h) = hmd {
+                    menu.pose = front_pose(&h, 0.8, 0.0);
+                }
+            }
             let mut action = MenuAction::None;
             let mut cfg = link.config();
             let mut cfg_changed = false;
             menu.render(&gpu, alpha_mode, ptr, |ctx| {
-                action = build_menu(ctx, screen, phase, connected, &clock, &mut cfg, &mut cfg_changed, panel_alpha);
+                action = build_menu(ctx, screen, phase, connected, &clock, &mut cfg, &mut cfg_changed, capture_secs, panel_alpha);
             })?;
             match action {
                 MenuAction::SetPhase(p) => link.set_phase(p),
                 MenuAction::OpenAutomations => screen = Screen::Automations,
+                MenuAction::OpenCalibrate => screen = Screen::Calibrate,
+                MenuAction::CapturePose => capture_at = Some(Instant::now() + CALIB_DELAY),
+                MenuAction::ClearPoses => {
+                    cfg.sleep.detection_poses.clear();
+                    cfg_changed = true;
+                }
                 MenuAction::Back => screen = Screen::Home,
                 MenuAction::None => {}
             }
             if cfg_changed {
                 link.set_config(cfg);
             }
+
+            // Capture finished? Record the current head-local gravity as a pose.
+            if let Some(t) = capture_at {
+                if Instant::now() >= t {
+                    capture_at = None;
+                    if let Some(g) = g_local {
+                        let mut c = link.config();
+                        c.sleep.detection_poses.push(g);
+                        link.set_config(c);
+                        input.pulse(&xr.session, false);
+                    }
+                }
+            }
+
             let laser_ready = laser_on && laser_ray.is_some() && laser.fill(&gpu).is_ok();
             menu_quad = Some(menu.quad(&xr.space, alpha_mode));
             laser_quad = match (laser_ready, laser_ray, hmd) {

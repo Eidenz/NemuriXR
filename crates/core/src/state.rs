@@ -37,6 +37,8 @@ pub struct State {
     pub brightness_backend: Option<String>,
     /// Resolved VRChat OSC target (host:port) when discovered, else None.
     pub osc_target: Option<String>,
+    /// The audio output device last controlled by an automation (for the UI).
+    pub audio_target: Option<String>,
     /// True while the in-headset overlay/core is running and serving IPC.
     pub overlay_running: bool,
 }

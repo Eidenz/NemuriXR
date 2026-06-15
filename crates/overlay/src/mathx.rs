@@ -29,6 +29,15 @@ pub fn qf(q: &xr::Quaternionf) -> [f32; 4] {
     [q.x, q.y, q.z, q.w]
 }
 
+/// World-down (gravity) expressed in the head's local frame. Yaw-invariant —
+/// it captures only how the head is tilted relative to gravity, so it's stable
+/// across recentering and which way you face. Used for sleep-pose matching.
+/// (Requires a gravity-aligned base space, i.e. LOCAL/STAGE.)
+pub fn gravity_local(q: &xr::Quaternionf) -> [f32; 3] {
+    let inv = [-q.x, -q.y, -q.z, q.w];
+    normalize(quat_rotate(inv, [0.0, -1.0, 0.0]))
+}
+
 pub fn vec3f(v: [f32; 3]) -> xr::Vector3f {
     xr::Vector3f { x: v[0], y: v[1], z: v[2] }
 }

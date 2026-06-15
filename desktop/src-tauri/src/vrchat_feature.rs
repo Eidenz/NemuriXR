@@ -90,7 +90,7 @@ fn handle_message(text: &str, engine: &Arc<Mutex<Engine>>, api: &SharedApi) {
 fn maybe_accept(engine: &Arc<Mutex<Engine>>, api: &SharedApi, notif_id: &str, sender: &str) {
     // Evaluate conditions against a quick snapshot, then drop the engine lock
     // before any network call.
-    let instance = {
+    let (instance, message_slot) = {
         let g = engine.lock().unwrap();
         let aa = &g.config.vrchat.auto_accept;
         if !aa.enabled {
@@ -111,14 +111,15 @@ fn maybe_accept(engine: &Arc<Mutex<Engine>>, api: &SharedApi, notif_id: &str, se
         if !allowed {
             return;
         }
-        g.vrchat_instance.clone()
+        let slot = aa.invite_message_enabled.then_some(aa.invite_message_slot);
+        (g.vrchat_instance.clone(), slot)
     };
     let Some(instance) = instance else {
         log::warn!("auto-accept: no current instance known yet; skipping");
         return;
     };
     let mut a = api.lock().unwrap();
-    if a.invite_user(sender, &instance) {
+    if a.invite_user(sender, &instance, message_slot) {
         a.hide_notification(notif_id);
         log::info!("auto-accepted invite request from {sender}");
     }

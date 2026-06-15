@@ -6,6 +6,7 @@
   import VrchatLive from "$lib/components/VrchatLive.svelte";
   import StatusView from "$lib/views/StatusView.svelte";
   import BrightnessView from "$lib/views/BrightnessView.svelte";
+  import AudioView from "$lib/views/AudioView.svelte";
   import OscView from "$lib/views/OscView.svelte";
   import JoinNotifications from "$lib/views/vrchat/JoinNotifications.svelte";
   import AutoAccept from "$lib/views/vrchat/AutoAccept.svelte";
@@ -27,6 +28,7 @@
   const tabs: Tab[] = [
     { id: "status", label: "Status" },
     { id: "brightness", label: "Brightness" },
+    { id: "audio", label: "Audio" },
     {
       id: "vrchat",
       label: "VRChat",
@@ -108,6 +110,8 @@
           <StatusView />
         {:else if active === "brightness"}
           <BrightnessView />
+        {:else if active === "audio"}
+          <AudioView />
         {:else}
           <OscView />
         {/if}

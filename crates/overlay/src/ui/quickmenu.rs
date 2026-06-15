@@ -14,12 +14,18 @@ use crate::theme;
 pub enum Screen {
     Home,
     Automations,
+    Calibrate,
 }
 
 pub enum MenuAction {
     None,
     SetPhase(SleepPhase),
     OpenAutomations,
+    OpenCalibrate,
+    /// Begin the capture countdown for a new sleep pose.
+    CapturePose,
+    /// Forget all calibrated sleep poses.
+    ClearPoses,
     Back,
 }
 
@@ -34,6 +40,7 @@ pub fn build_menu(
     clock: &str,
     cfg: &mut Config,
     changed: &mut bool,
+    capture_secs: Option<u32>,
     alpha: u8,
 ) -> MenuAction {
     let mut action = MenuAction::None;
@@ -43,8 +50,9 @@ pub fn build_menu(
                 offline_banner(ui);
             }
             match screen {
-                Screen::Home => home(ui, phase, clock, &mut action),
+                Screen::Home => home(ui, phase, clock, cfg.sleep.detection_enabled, &mut action),
                 Screen::Automations => automations(ui, cfg, changed, &mut action),
+                Screen::Calibrate => calibrate(ui, cfg, capture_secs, &mut action),
             }
         });
     });
@@ -86,7 +94,7 @@ fn offline_banner(ui: &mut egui::Ui) {
     ui.add_space(10.0);
 }
 
-fn home(ui: &mut egui::Ui, phase: SleepPhase, clock: &str, action: &mut MenuAction) {
+fn home(ui: &mut egui::Ui, phase: SleepPhase, clock: &str, detection_enabled: bool, action: &mut MenuAction) {
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(format!("{}  ", icons::MOON)).size(26.0).color(theme::SLEEP));
         ui.label(egui::RichText::new("Nemuri").size(26.0).strong().color(Color32::WHITE));
@@ -113,6 +121,71 @@ fn home(ui: &mut egui::Ui, phase: SleepPhase, clock: &str, action: &mut MenuActi
     // Entry to the automations toggle list.
     if wide_button(ui, icons::SLIDERS_HORIZONTAL, "Automations", false) {
         *action = MenuAction::OpenAutomations;
+    }
+
+    // Sleep-pose calibration is only relevant when detection is on.
+    if detection_enabled {
+        ui.add_space(8.0);
+        if wide_button(ui, icons::PERSON_SIMPLE_TAI_CHI, "Calibrate sleep pose", false) {
+            *action = MenuAction::OpenCalibrate;
+        }
+    }
+}
+
+/// The in-headset sleep-pose calibration screen. Capturing a pose records how
+/// your head is tilted (relative to gravity) while you lie the way you sleep, so
+/// detection only arms in that posture. With none saved, stillness alone arms it.
+fn calibrate(ui: &mut egui::Ui, cfg: &mut Config, capture_secs: Option<u32>, action: &mut MenuAction) {
+    ui.horizontal(|ui| {
+        if ui.add(egui::Button::new(egui::RichText::new(icons::ARROW_LEFT).size(22.0)).frame(false)).clicked() {
+            *action = MenuAction::Back;
+        }
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new("Calibrate sleep pose").size(22.0).strong().color(Color32::WHITE));
+    });
+    ui.add_space(6.0);
+    ui.separator();
+    ui.add_space(10.0);
+
+    let count = cfg.sleep.detection_poses.len();
+
+    if let Some(secs) = capture_secs {
+        // Counting down — give the user time to settle into position.
+        ui.vertical_centered(|ui| {
+            ui.add_space(10.0);
+            ui.label(egui::RichText::new("Get into your sleeping position").size(18.0).color(theme::ON_SURFACE));
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new(format!("{secs}")).size(72.0).strong().color(theme::SLEEP));
+            ui.label(egui::RichText::new("Hold still — capturing your pose").size(14.0).color(theme::ON_SURFACE_VAR));
+            ui.add_space(10.0);
+        });
+        return;
+    }
+
+    let saved = if count == 0 {
+        "No poses saved — stillness alone will trigger sleep.".to_string()
+    } else if count == 1 {
+        "1 pose saved.".to_string()
+    } else {
+        format!("{count} poses saved.")
+    };
+    ui.label(egui::RichText::new(saved).size(15.0).color(theme::ON_SURFACE));
+    ui.add_space(4.0);
+    ui.label(
+        egui::RichText::new("Lie down as you sleep, then capture. Add a pose for each position you use (back, side…).")
+            .size(13.0)
+            .color(theme::ON_SURFACE_VAR),
+    );
+    ui.add_space(14.0);
+
+    if wide_button(ui, icons::PLUS_CIRCLE, "Capture a pose", false) {
+        *action = MenuAction::CapturePose;
+    }
+    if count > 0 {
+        ui.add_space(8.0);
+        if wide_button(ui, icons::TRASH, "Clear all poses", false) {
+            *action = MenuAction::ClearPoses;
+        }
     }
 }
 

@@ -17,6 +17,7 @@ pub struct Config {
     pub auto_launch_overlay: bool,
     pub sleep: SleepConfig,
     pub brightness: BrightnessConfig,
+    pub audio: AudioConfig,
     pub vrchat: VrchatConfig,
     pub osc: OscConfig,
 
@@ -51,6 +52,14 @@ pub struct SleepConfig {
     pub detection_sensitivity: Sensitivity,
     /// Minutes of stillness before the (cancelable) sleep countdown.
     pub detection_minutes: u32,
+
+    // ---- optional sleep-pose calibration ----
+    /// Calibrated sleep poses, each the gravity direction in head-local space
+    /// (yaw-invariant). Empty = uncalibrated => stillness alone triggers; when
+    /// non-empty the head must also be near one of these poses.
+    pub detection_poses: Vec<[f32; 3]>,
+    /// Max angle (degrees) from a calibrated pose that still counts as "in pose".
+    pub detection_pose_tolerance: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -85,6 +94,34 @@ pub struct BrightnessLevel {
     pub transition_seconds: u32,
 }
 
+// ---- Audio volume ---------------------------------------------------------
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AudioConfig {
+    /// Apply audio changes on phase transitions.
+    pub enabled: bool,
+    pub on_wake: AudioLevel,
+    pub on_prepare: AudioLevel,
+    pub on_sleep: AudioLevel,
+}
+
+/// Per-phase audio settings. The output device is whichever one VRChat is
+/// currently playing to (auto-detected); the default device is used as a
+/// fallback. Same for the microphone (the device VRChat captures from).
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AudioLevel {
+    /// Set the output device's volume on this phase.
+    pub set_volume: bool,
+    /// 0–100 % output volume.
+    pub volume: u8,
+    /// Change the microphone mute state on this phase.
+    pub set_mic: bool,
+    /// Mute (true) / unmute (false) the mic on this phase.
+    pub mic_muted: bool,
+}
+
 // ---- VRChat ---------------------------------------------------------------
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -117,6 +154,10 @@ pub struct AutoAcceptConfig {
     /// Only auto-accept when fewer than this many players are in the world
     /// (includes yourself).
     pub max_players: u32,
+    /// Send one of your VRChat invite-message templates when accepting.
+    pub invite_message_enabled: bool,
+    /// Which invite-message slot (0–11) to send.
+    pub invite_message_slot: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -198,6 +239,8 @@ impl Default for SleepConfig {
             detect_end: String::new(),
             detection_sensitivity: Sensitivity::Medium,
             detection_minutes: 15,
+            detection_poses: Vec::new(),
+            detection_pose_tolerance: 30,
         }
     }
 }
@@ -228,6 +271,25 @@ impl Default for AutoAcceptConfig {
             only_when_sleep: false,
             max_players_enabled: false,
             max_players: 2,
+            invite_message_enabled: false,
+            invite_message_slot: 0,
+        }
+    }
+}
+
+impl Default for AudioLevel {
+    fn default() -> Self {
+        Self { set_volume: false, volume: 100, set_mic: false, mic_muted: false }
+    }
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            on_wake: AudioLevel { set_volume: true, volume: 100, set_mic: true, mic_muted: false },
+            on_prepare: AudioLevel { set_volume: true, volume: 60, set_mic: false, mic_muted: false },
+            on_sleep: AudioLevel { set_volume: true, volume: 25, set_mic: true, mic_muted: true },
         }
     }
 }
@@ -276,6 +338,7 @@ impl Default for Config {
             auto_launch_overlay: true,
             sleep: SleepConfig::default(),
             brightness: BrightnessConfig::default(),
+            audio: AudioConfig::default(),
             vrchat: VrchatConfig::default(),
             osc: OscConfig::default(),
             path: config_path(),

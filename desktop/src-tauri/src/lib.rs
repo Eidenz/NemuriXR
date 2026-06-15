@@ -14,10 +14,11 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
 
-use nemurixr_core::config::BrightnessLevel;
+use nemurixr_core::config::{AudioLevel, BrightnessLevel};
 use nemurixr_core::ipc::{self, Request, Response};
 use nemurixr_core::{Config, SleepPhase, State};
 
+mod audio;
 mod brightness;
 mod osc;
 mod overlay_launcher;
@@ -29,7 +30,7 @@ mod vrchat_feature;
 
 use overlay_launcher::OverlayChild;
 
-use vrchat_api::{Api, Friend, LoginOutcome, LoginStatus, SharedApi};
+use vrchat_api::{Api, Friend, InviteMessage, LoginOutcome, LoginStatus, SharedApi};
 
 /// The in-process engine. Owns the source-of-truth config + live state.
 pub(crate) struct Engine {
@@ -46,6 +47,8 @@ pub(crate) struct Engine {
     bright_current: Arc<Mutex<Option<(u8, u8)>>>,
     /// Bumped on each brightness transition; an in-flight fade aborts when it changes.
     fade_gen: Arc<AtomicU64>,
+    /// Last audio output device an automation controlled (for the UI).
+    audio_target: Arc<Mutex<Option<String>>>,
 }
 
 impl Engine {
@@ -63,6 +66,7 @@ impl Engine {
             vrchat_instance: None,
             bright_current: Arc::new(Mutex::new(None)),
             fade_gen: Arc::new(AtomicU64::new(0)),
+            audio_target: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -107,6 +111,25 @@ impl Engine {
         std::thread::spawn(move || brightness::transition(backend, current, fade_gen, gen, to, dur));
     }
 
+    fn audio_level(&self, phase: SleepPhase) -> AudioLevel {
+        match phase {
+            SleepPhase::Awake => self.config.audio.on_wake,
+            SleepPhase::Prepare => self.config.audio.on_prepare,
+            SleepPhase::Sleep => self.config.audio.on_sleep,
+        }
+    }
+
+    /// Apply a phase's audio level on a background thread (pactl spawns several
+    /// short-lived processes; don't hold the engine lock for that).
+    fn apply_audio(&self, level: AudioLevel) {
+        let target = self.audio_target.clone();
+        std::thread::spawn(move || {
+            if let Some(desc) = audio::apply(&level) {
+                *target.lock().unwrap() = Some(desc);
+            }
+        });
+    }
+
     /// Apply `level` immediately (no fade) — used for previews.
     fn preview_brightness(&mut self, level: BrightnessLevel) {
         self.brightness = brightness::detect();
@@ -131,6 +154,10 @@ impl Engine {
             let level = self.brightness_level(phase);
             self.fade_brightness(level);
         }
+        if self.config.audio.enabled {
+            let level = self.audio_level(phase);
+            self.apply_audio(level);
+        }
         self.send_osc(phase);
         // Future: VRChat status automations also fire here.
     }
@@ -140,6 +167,7 @@ impl Engine {
         let mut s = self.state.clone();
         s.overlay_running = self.last_overlay_seen.is_some_and(|t| t.elapsed().as_secs() < 3);
         s.osc_target = osc::resolve_target(&self.config.osc, self.osc_target).map(|a| a.to_string());
+        s.audio_target = self.audio_target.lock().unwrap().clone();
         s
     }
 
@@ -221,6 +249,14 @@ fn send_osc(engine: tauri::State<Shared>, which: String) {
     engine.lock().unwrap().send_osc(phase_from_str(&which));
 }
 
+/// Apply a phase's audio level now (preview). `which` is awake/prepare/sleep.
+#[tauri::command]
+fn apply_audio(engine: tauri::State<Shared>, which: String) {
+    let g = engine.lock().unwrap();
+    let level = g.audio_level(phase_from_str(&which));
+    g.apply_audio(level);
+}
+
 /// Preview a notification sound. `kind` is "join" or "leave".
 #[tauri::command]
 fn test_sound(engine: tauri::State<Shared>, kind: String) {
@@ -299,6 +335,24 @@ async fn vrchat_friends(vrc: tauri::State<'_, SharedApi>) -> Result<Vec<Friend>,
     .map_err(|e| e.to_string())
 }
 
+/// The user's invite-message templates, for the auto-accept message picker.
+#[tauri::command]
+async fn vrchat_invite_messages(vrc: tauri::State<'_, SharedApi>) -> Result<Vec<InviteMessage>, String> {
+    let api = vrc.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().invite_messages())
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Edit one invite-message slot (rate-limited by VRChat to ~once/hour/slot).
+#[tauri::command]
+async fn vrchat_update_invite_message(vrc: tauri::State<'_, SharedApi>, slot: u32, text: String) -> Result<Vec<InviteMessage>, String> {
+    let api = vrc.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || api.lock().unwrap().update_invite_message(slot, &text))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -360,13 +414,16 @@ pub fn run() {
             set_phase,
             apply_brightness,
             send_osc,
+            apply_audio,
             test_sound,
             launch_overlay,
             vrchat_login,
             vrchat_verify_2fa,
             vrchat_logout,
             vrchat_status,
-            vrchat_friends
+            vrchat_friends,
+            vrchat_invite_messages,
+            vrchat_update_invite_message
         ])
         .setup(|app| {
             // System tray: left-click opens the window; the menu has Open + Quit.

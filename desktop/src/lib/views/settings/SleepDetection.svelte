@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { app, save, saveSoon } from "$lib/state.svelte";
+  import { onMount } from "svelte";
+  import { app, load, save, saveSoon } from "$lib/state.svelte";
   import GlassCard from "$lib/components/GlassCard.svelte";
   import Toggle from "$lib/components/Toggle.svelte";
   import Slider from "$lib/components/Slider.svelte";
@@ -9,6 +10,16 @@
     { v: "medium", l: "Medium — recommended" },
     { v: "high", l: "High — sleeps with small movements" },
   ];
+
+  // Calibration is captured in-headset, so re-read config on open to show the
+  // latest saved pose count.
+  onMount(load);
+
+  function clearPoses() {
+    if (!app.config) return;
+    app.config.sleep.detection_poses = [];
+    save();
+  }
 </script>
 
 {#if app.config}
@@ -60,6 +71,44 @@
         <div class="txt"><span class="t">Until</span></div>
         <input type="time" bind:value={sleep.detect_end} onchange={save} />
       </div>
+    </div>
+  </GlassCard>
+
+  <GlassCard
+    title="Sleep Pose Calibration"
+    desc="Optional. Calibrate the position you sleep in so detection only triggers in that posture — useful if you nap reclined or on your side. Without it, staying still in any position is enough."
+  >
+    <div class="rows">
+      <div class="row">
+        <div class="txt">
+          <span class="t">Calibrated poses</span>
+          <span class="d">
+            {#if sleep.detection_poses.length === 0}
+              None — stillness alone will trigger sleep
+            {:else}
+              {sleep.detection_poses.length}
+              {sleep.detection_poses.length === 1 ? "pose" : "poses"} saved
+            {/if}
+          </span>
+        </div>
+        <button class="clear" disabled={sleep.detection_poses.length === 0} onclick={clearPoses}>Clear all</button>
+      </div>
+
+      <div class="row slider" class:dim={sleep.detection_poses.length === 0}>
+        <Slider
+          label="Pose match tolerance (degrees)"
+          min={10}
+          max={50}
+          editable
+          bind:value={sleep.detection_pose_tolerance}
+          onchange={saveSoon}
+        />
+      </div>
+
+      <p class="hint">
+        To calibrate, put on the headset and open the menu (double-tap <strong>A</strong> on the right controller), then choose
+        <strong>Calibrate sleep pose</strong>. Lie down the way you sleep and capture — add a pose for each position you use.
+      </p>
     </div>
   </GlassCard>
 {/if}
@@ -128,5 +177,34 @@
   input[type="time"]:focus {
     outline: none;
     border-color: hsl(var(--primary) / 0.6);
+  }
+  .clear {
+    height: 36px;
+    padding: 0 14px;
+    border-radius: var(--radius-s);
+    border: 1px solid hsl(var(--glass-border) / 0.12);
+    background: hsl(var(--glass-bg) / 0.5);
+    color: hsl(var(--foreground));
+    font-size: 13.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s var(--ease), opacity 0.15s var(--ease);
+  }
+  .clear:hover:not(:disabled) {
+    border-color: hsl(var(--primary) / 0.6);
+  }
+  .clear:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .hint {
+    margin: 14px 0 0;
+    color: hsl(var(--muted-foreground));
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+  .hint strong {
+    color: hsl(var(--foreground));
   }
 </style>

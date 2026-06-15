@@ -89,3 +89,15 @@ fn angle_between_deg(a: [f32; 4], b: [f32; 4]) -> f32 {
     let dot = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]).abs().clamp(0.0, 1.0);
     2.0 * dot.acos() * 180.0 / std::f32::consts::PI
 }
+
+/// Smallest angle (degrees) between a head-local gravity vector and any
+/// calibrated sleep pose. `None` when there are no calibrated poses.
+pub fn nearest_pose_deg(g: [f32; 3], poses: &[[f32; 3]]) -> Option<f32> {
+    poses
+        .iter()
+        .map(|p| {
+            let d = (g[0] * p[0] + g[1] * p[1] + g[2] * p[2]).clamp(-1.0, 1.0);
+            d.acos() * 180.0 / std::f32::consts::PI
+        })
+        .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+}
