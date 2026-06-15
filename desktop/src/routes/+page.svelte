@@ -3,20 +3,57 @@
   import { app, startPolling, stopPolling } from "$lib/state.svelte";
   import Backdrop from "$lib/components/Backdrop.svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
+  import VrchatLive from "$lib/components/VrchatLive.svelte";
   import StatusView from "$lib/views/StatusView.svelte";
   import BrightnessView from "$lib/views/BrightnessView.svelte";
-  import VrchatView from "$lib/views/VrchatView.svelte";
   import OscView from "$lib/views/OscView.svelte";
-  import SettingsView from "$lib/views/SettingsView.svelte";
+  import JoinNotifications from "$lib/views/vrchat/JoinNotifications.svelte";
+  import AutoAccept from "$lib/views/vrchat/AutoAccept.svelte";
+  import StatusAutomations from "$lib/views/vrchat/StatusAutomations.svelte";
+  import Account from "$lib/views/settings/Account.svelte";
+  import Schedule from "$lib/views/settings/Schedule.svelte";
+  import General from "$lib/views/settings/General.svelte";
 
-  const tabs = [
+  interface Section {
+    id: string;
+    label: string;
+  }
+  interface Tab {
+    id: string;
+    label: string;
+    sections?: Section[];
+  }
+  const tabs: Tab[] = [
     { id: "status", label: "Status" },
     { id: "brightness", label: "Brightness" },
-    { id: "vrchat", label: "VRChat" },
+    {
+      id: "vrchat",
+      label: "VRChat",
+      sections: [
+        { id: "join", label: "Join Notifications" },
+        { id: "autoaccept", label: "Auto-Accept" },
+        { id: "statusauto", label: "Status Automations" },
+      ],
+    },
     { id: "osc", label: "OSC" },
-    { id: "settings", label: "Settings" },
+    {
+      id: "settings",
+      label: "Settings",
+      sections: [
+        { id: "account", label: "VRChat Account" },
+        { id: "schedule", label: "Sleep Schedule" },
+        { id: "general", label: "General" },
+      ],
+    },
   ];
+
   let active = $state("status");
+  // Remembers the chosen sub-section per top tab.
+  let section = $state<Record<string, string>>({ vrchat: "join", settings: "account" });
+
+  const current = $derived(tabs.find((t) => t.id === active) ?? tabs[0]);
+  const sections = $derived(current.sections ?? []);
+  const sub = $derived(section[active] ?? sections[0]?.id ?? "");
 
   onMount(startPolling);
   onDestroy(stopPolling);
@@ -24,18 +61,53 @@
 
 <Backdrop />
 <div class="app">
-  <TitleBar {active} {tabs} onChange={(id) => (active = id)} connected={app.state?.overlay_running ?? false} />
-  <main class="content">
-    {#if active === "status"}
-      <StatusView />
-    {:else if active === "brightness"}
-      <BrightnessView />
-    {:else if active === "vrchat"}
-      <VrchatView />
-    {:else if active === "osc"}
-      <OscView />
+  <TitleBar
+    {active}
+    tabs={tabs.map((t) => ({ id: t.id, label: t.label }))}
+    onChange={(id) => (active = id)}
+    connected={app.state?.overlay_running ?? false}
+  />
+  <main class="main">
+    {#if sections.length}
+      <aside class="subnav glass">
+        {#each sections as s (s.id)}
+          <button class="subitem state-layer" class:active={sub === s.id} onclick={() => (section[active] = s.id)}>
+            {s.label}
+          </button>
+        {/each}
+      </aside>
+      <div class="content">
+        <div class="section">
+          {#if active === "vrchat"}
+            <VrchatLive />
+            {#if sub === "join"}
+              <JoinNotifications />
+            {:else if sub === "autoaccept"}
+              <AutoAccept />
+            {:else}
+              <StatusAutomations />
+            {/if}
+          {:else if active === "settings"}
+            {#if sub === "account"}
+              <Account />
+            {:else if sub === "schedule"}
+              <Schedule />
+            {:else}
+              <General />
+            {/if}
+          {/if}
+        </div>
+      </div>
     {:else}
-      <SettingsView />
+      <div class="content">
+        {#if active === "status"}
+          <StatusView />
+        {:else if active === "brightness"}
+          <BrightnessView />
+        {:else}
+          <OscView />
+        {/if}
+      </div>
     {/if}
   </main>
 </div>
@@ -46,9 +118,49 @@
     flex-direction: column;
     height: 100vh;
   }
+  .main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  .subnav {
+    width: 212px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 10px;
+    margin: 16px 0 16px 16px;
+    border-radius: var(--radius-l);
+    align-self: flex-start;
+  }
+  .subitem {
+    text-align: left;
+    padding: 10px 14px;
+    border-radius: var(--radius-m);
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+    font-weight: 600;
+    transition: color 0.15s var(--ease), background 0.15s var(--ease);
+  }
+  .subitem:hover {
+    color: hsl(var(--foreground));
+  }
+  .subitem.active {
+    color: hsl(var(--foreground));
+    background: hsl(var(--primary) / 0.22);
+  }
   .content {
     flex: 1;
+    min-width: 0;
     overflow-y: auto;
     padding: 26px 28px 32px;
+  }
+  .section {
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
   }
 </style>

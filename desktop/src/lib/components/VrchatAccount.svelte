@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { vrchatStatus, vrchatLogin, vrchatVerify2fa, vrchatLogout } from "$lib/api";
-  import type { LoginStatus } from "$lib/types";
+  import { vrchatLogin, vrchatVerify2fa, vrchatLogout } from "$lib/api";
+  import { app, loadVrchatLogin } from "$lib/state.svelte";
   import GlassCard from "./GlassCard.svelte";
 
-  let status = $state<LoginStatus>({ logged_in: false, username: null });
   let username = $state("");
   let password = $state("");
   let busy = $state(false);
@@ -18,13 +17,7 @@
   const methodLabel = (m: string) =>
     m === "totp" ? "Authenticator app" : m === "emailOtp" ? "Email code" : "One-time code";
 
-  onMount(async () => {
-    try {
-      status = await vrchatStatus();
-    } catch (e) {
-      console.error(e);
-    }
-  });
+  onMount(loadVrchatLogin);
 
   async function login() {
     if (busy) return;
@@ -33,7 +26,7 @@
     try {
       const res = await vrchatLogin(username, password);
       if (res.kind === "logged_in") {
-        status = { logged_in: true, username: res.username };
+        app.vrchatLogin = { logged_in: true, username: res.username };
         password = "";
       } else if (res.kind === "needs_2fa") {
         methods = res.methods;
@@ -56,7 +49,7 @@
     try {
       const res = await vrchatVerify2fa(method, code);
       if (res.kind === "logged_in") {
-        status = { logged_in: true, username: res.username };
+        app.vrchatLogin = { logged_in: true, username: res.username };
         methods = null;
         code = "";
       } else if (res.kind === "failed") {
@@ -72,7 +65,7 @@
   async function logout() {
     busy = true;
     try {
-      status = await vrchatLogout();
+      app.vrchatLogin = await vrchatLogout();
       methods = null;
       username = "";
       code = "";
@@ -83,11 +76,11 @@
 </script>
 
 <GlassCard title="VRChat Account" desc="Sign in to enable auto-accept invites and status automations. Your password is never stored — only a session token, kept in your system keyring.">
-  {#if status.logged_in}
+  {#if app.vrchatLogin.logged_in}
     <div class="loggedin">
       <div class="who">
         <span class="dot on"></span>
-        Signed in as <strong>{status.username}</strong>
+        Signed in as <strong>{app.vrchatLogin.username}</strong>
       </div>
       <button class="btn tonal state-layer" disabled={busy} onclick={logout}>Sign out</button>
     </div>
