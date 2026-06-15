@@ -7,8 +7,9 @@
 //
 // Auth flow mirrors VRChat's API: GET /auth/user with HTTP Basic auth; if it
 // returns `requiresTwoFactorAuth`, POST the code to /auth/twofactorauth/<m>/verify.
+use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use reqwest::blocking::{Client, Response};
@@ -40,12 +41,49 @@ pub struct LoginStatus {
     pub username: Option<String>,
 }
 
+/// A VRChat friend, for the auto-accept whitelist picker.
+#[derive(Serialize, Clone)]
+pub struct Friend {
+    pub id: String,
+    pub display_name: String,
+}
+
+/// Sliding-window rate limiter. VRChat permits API use but dislikes spam, so
+/// every write is capped per-minute (plus a global cap). Mirrors OyasumiVR's
+/// limits. Our triggers are event-driven (websocket + log), so this is mostly a
+/// safety net.
+#[derive(Default)]
+struct RateLimiter {
+    hits: HashMap<&'static str, Vec<Instant>>,
+}
+
+impl RateLimiter {
+    fn under(&mut self, key: &'static str, now: Instant, cap: usize) -> bool {
+        let v = self.hits.entry(key).or_default();
+        v.retain(|t| now.duration_since(*t) < Duration::from_secs(60));
+        v.len() < cap
+    }
+
+    /// Allow a call of `key` (per-minute `cap`) if both it and the global cap
+    /// (15/min) have room; records the call when allowed.
+    fn allow(&mut self, key: &'static str, cap: usize) -> bool {
+        let now = Instant::now();
+        if !self.under("__global", now, 15) || !self.under(key, now, cap) {
+            return false;
+        }
+        self.hits.get_mut("__global").unwrap().push(now);
+        self.hits.get_mut(key).unwrap().push(now);
+        true
+    }
+}
+
 pub struct Api {
     client: Client,
     auth_cookie: Option<String>,
     two_factor_cookie: Option<String>,
     pub user_id: Option<String>,
     pub username: Option<String>,
+    limiter: RateLimiter,
 }
 
 impl Api {
@@ -56,9 +94,107 @@ impl Api {
             .timeout(Duration::from_secs(20))
             .build()
             .unwrap_or_else(|_| Client::new());
-        let mut api = Self { client, auth_cookie: None, two_factor_cookie: None, user_id: None, username: None };
+        let mut api =
+            Self { client, auth_cookie: None, two_factor_cookie: None, user_id: None, username: None, limiter: RateLimiter::default() };
         api.load_cookies();
         api
+    }
+
+    /// The websocket auth token (the `auth` session cookie value).
+    pub fn auth_token(&self) -> Option<String> {
+        self.auth_cookie.clone()
+    }
+
+    /// Accept an invite request by inviting the user into our instance.
+    pub fn invite_user(&mut self, user_id: &str, instance_id: &str) -> bool {
+        if self.user_id.is_none() {
+            return false;
+        }
+        if !self.limiter.allow("invite", 12) {
+            log::warn!("VRChat: invite rate-limited, skipping");
+            return false;
+        }
+        match self
+            .client
+            .post(format!("{API}/invite/{user_id}"))
+            .header("Cookie", self.cookie_header())
+            .json(&serde_json::json!({ "instanceId": instance_id }))
+            .send()
+        {
+            Ok(r) => r.status().is_success(),
+            Err(e) => {
+                log::warn!("VRChat invite failed: {e}");
+                false
+            }
+        }
+    }
+
+    /// Hide (dismiss) a notification after handling it.
+    pub fn hide_notification(&mut self, notification_id: &str) -> bool {
+        if !self.limiter.allow("hide_notification", 3) {
+            return false;
+        }
+        match self
+            .client
+            .put(format!("{API}/auth/user/notifications/{notification_id}/hide"))
+            .header("Cookie", self.cookie_header())
+            .send()
+        {
+            Ok(r) => r.status().is_success(),
+            Err(e) => {
+                log::warn!("VRChat hide notification failed: {e}");
+                false
+            }
+        }
+    }
+
+    /// Set the account status (e.g. "join me", "ask me", "busy").
+    pub fn set_status(&mut self, status: &str) -> bool {
+        let Some(uid) = self.user_id.clone() else { return false };
+        if !self.limiter.allow("status", 6) {
+            log::warn!("VRChat: status change rate-limited, skipping");
+            return false;
+        }
+        match self
+            .client
+            .put(format!("{API}/users/{uid}"))
+            .header("Cookie", self.cookie_header())
+            .json(&serde_json::json!({ "status": status }))
+            .send()
+        {
+            Ok(r) => r.status().is_success(),
+            Err(e) => {
+                log::warn!("VRChat set status failed: {e}");
+                false
+            }
+        }
+    }
+
+    /// Friends list (online + offline, up to 100 each) for the whitelist picker.
+    pub fn get_friends(&mut self) -> Vec<Friend> {
+        if self.auth_cookie.is_none() {
+            return Vec::new();
+        }
+        let mut out: Vec<Friend> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for offline in [false, true] {
+            if !self.limiter.allow("friends", 15) {
+                break;
+            }
+            let url = format!("{API}/auth/user/friends?n=100&offset=0&offline={offline}");
+            let Ok(resp) = self.client.get(url).header("Cookie", self.cookie_header()).send() else { continue };
+            self.capture_cookies(&resp);
+            let Ok(arr) = resp.json::<Vec<Value>>() else { continue };
+            for f in arr {
+                if let (Some(id), Some(name)) = (f.get("id").and_then(Value::as_str), f.get("displayName").and_then(Value::as_str)) {
+                    if seen.insert(id.to_string()) {
+                        out.push(Friend { id: id.to_string(), display_name: name.to_string() });
+                    }
+                }
+            }
+        }
+        out.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+        out
     }
 
     pub fn login_status(&self) -> LoginStatus {

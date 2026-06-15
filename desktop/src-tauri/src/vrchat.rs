@@ -75,6 +75,7 @@ struct Notify {
 #[derive(Default)]
 struct Watcher {
     world: Option<String>,
+    instance: Option<String>, // full location "wrld_…:…" (for inviting people in)
     players: HashSet<String>, // includes the local player (VRChat logs self too)
     local_id: Option<String>,
     local_name: Option<String>,
@@ -160,8 +161,14 @@ impl Watcher {
             self.world = Some(room.trim().to_string());
             self.players.clear();
             self.suppress_until = Some(Instant::now() + JOIN_GRACE);
+        } else if let Some(loc) = rest.strip_prefix("Joining ") {
+            // "Joining wrld_xxx:12345~region(eu)" — the full instance location.
+            if loc.starts_with("wrld_") {
+                self.instance = loc.split_whitespace().next().map(str::to_string);
+            }
         } else if rest.starts_with("OnLeftRoom") {
             self.world = None;
+            self.instance = None;
             self.players.clear();
         }
         None
@@ -238,7 +245,7 @@ fn player_key(s: &str) -> String {
 }
 
 fn publish(engine: &Arc<Mutex<Engine>>, w: &Watcher) {
-    engine.lock().unwrap().set_vrchat(w.world.clone(), w.player_count());
+    engine.lock().unwrap().set_vrchat(w.world.clone(), w.instance.clone(), w.player_count());
 }
 
 #[cfg(test)]

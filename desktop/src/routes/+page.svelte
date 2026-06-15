@@ -40,16 +40,16 @@
       id: "settings",
       label: "Settings",
       sections: [
-        { id: "account", label: "VRChat Account" },
-        { id: "schedule", label: "Sleep Schedule" },
         { id: "general", label: "General" },
+        { id: "schedule", label: "Sleep Schedule" },
+        { id: "account", label: "VRChat Account" },
       ],
     },
   ];
 
   let active = $state("status");
   // Remembers the chosen sub-section per top tab.
-  let section = $state<Record<string, string>>({ vrchat: "join", settings: "account" });
+  let section = $state<Record<string, string>>({ vrchat: "join", settings: "general" });
 
   const current = $derived(tabs.find((t) => t.id === active) ?? tabs[0]);
   const sections = $derived(current.sections ?? []);

@@ -29,6 +29,7 @@ nemurixr-core = { path = "../../crates/core" }
 
 # VRChat API
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+tungstenite = { version = "0.29", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 base64 = "0.22"
 urlencoding = "2"

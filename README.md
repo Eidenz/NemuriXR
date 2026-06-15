@@ -50,10 +50,12 @@ automation engines themselves are the next milestones.
    delays; VRChat's OSC port found via OSCQuery (mDNS), manual host/port fallback.
 7. ✅ **Sleep schedule** — enters/leaves sleep mode at set times (edge-triggered,
    so a manual toggle still overrides until the next scheduled time).
-8. 🔨 **VRChat API** — secure login done (username/password + 2FA; the session
-   token is kept in the **OS keyring**, password never stored). Auto-accept
-   invites + status automations (pipeline websocket) are the next step.
+8. ✅ **VRChat API** — secure login (2FA; session token in the **OS keyring**,
+   password never stored). **Auto-accept invite requests** (whitelist/blacklist +
+   max-players + only-when-sleep) over the **pipeline websocket**, and **status
+   automations** by player count. Event-driven (no polling) + rate-limited.
 9. ⏳ **Motion-based sleep detection** (a later version).
+10. ⏳ **Packaging** — `tauri build` (AppImage/.deb) + autostart.
 
 ## Layout
 

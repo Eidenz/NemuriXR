@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Config, LoginOutcome, LoginStatus, SleepPhase, State } from "./types";
+import type { Config, Friend, LoginOutcome, LoginStatus, SleepPhase, State } from "./types";
 
 export const getConfig = () => invoke<Config>("get_config");
 export const setConfig = (config: Config) => invoke("set_config", { config });
@@ -14,3 +14,4 @@ export const vrchatStatus = () => invoke<LoginStatus>("vrchat_status");
 export const vrchatLogin = (username: string, password: string) => invoke<LoginOutcome>("vrchat_login", { username, password });
 export const vrchatVerify2fa = (method: string, code: string) => invoke<LoginOutcome>("vrchat_verify_2fa", { method, code });
 export const vrchatLogout = () => invoke<LoginStatus>("vrchat_logout");
+export const vrchatFriends = () => invoke<Friend[]>("vrchat_friends");

@@ -84,6 +84,11 @@ export interface LoginStatus {
   username: string | null;
 }
 
+export interface Friend {
+  id: string;
+  display_name: string;
+}
+
 export interface State {
   sleep_phase: SleepPhase;
   player_count: number;

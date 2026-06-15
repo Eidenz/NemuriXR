@@ -24,8 +24,9 @@ mod schedule;
 mod sound;
 mod vrchat;
 mod vrchat_api;
+mod vrchat_feature;
 
-use vrchat_api::{Api, LoginOutcome, LoginStatus, SharedApi};
+use vrchat_api::{Api, Friend, LoginOutcome, LoginStatus, SharedApi};
 
 /// The in-process engine. Owns the source-of-truth config + live state.
 pub(crate) struct Engine {
@@ -36,6 +37,8 @@ pub(crate) struct Engine {
     brightness: brightness::Backend,
     /// VRChat OSC target discovered via OSCQuery (mDNS), if any.
     osc_target: Option<SocketAddr>,
+    /// Current VRChat instance location ("wrld_…:…"), for accepting invites.
+    vrchat_instance: Option<String>,
     /// Last applied (brightness%, fan%) — the "from" point for the next fade.
     bright_current: Arc<Mutex<Option<(u8, u8)>>>,
     /// Bumped on each brightness transition; an in-flight fade aborts when it changes.
@@ -54,6 +57,7 @@ impl Engine {
             last_overlay_seen: None,
             brightness: backend,
             osc_target: None,
+            vrchat_instance: None,
             bright_current: Arc::new(Mutex::new(None)),
             fade_gen: Arc::new(AtomicU64::new(0)),
         }
@@ -142,8 +146,9 @@ impl Engine {
         self.config.vrchat.log_dir.clone()
     }
 
-    pub(crate) fn set_vrchat(&mut self, world: Option<String>, player_count: u32) {
+    pub(crate) fn set_vrchat(&mut self, world: Option<String>, instance: Option<String>, player_count: u32) {
         self.state.vrchat_world = world;
+        self.vrchat_instance = instance;
         self.state.player_count = player_count;
     }
 
@@ -248,6 +253,12 @@ fn vrchat_status(vrc: tauri::State<SharedApi>) -> LoginStatus {
     vrc.lock().unwrap().login_status()
 }
 
+/// Friends list for the auto-accept whitelist picker.
+#[tauri::command]
+fn vrchat_friends(vrc: tauri::State<SharedApi>) -> Vec<Friend> {
+    vrc.lock().unwrap().get_friends()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -267,6 +278,8 @@ pub fn run() {
         let v = vrc.clone();
         std::thread::spawn(move || v.lock().unwrap().restore());
     }
+    // VRChat automation engine: pipeline websocket (auto-accept) + status automations.
+    vrchat_feature::spawn(engine.clone(), vrc.clone());
 
     // IPC server for the VR overlay (reads state, sends sleep/config commands).
     {
@@ -306,7 +319,8 @@ pub fn run() {
             vrchat_login,
             vrchat_verify_2fa,
             vrchat_logout,
-            vrchat_status
+            vrchat_status,
+            vrchat_friends
         ])
         .setup(|app| {
             // System tray: left-click opens the window; the menu has Open + Quit.
