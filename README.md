@@ -26,7 +26,9 @@ NemuriXR can notice when you're heading to sleep in VR and handles the things yo
   - Join/leave **notification sounds** and a live player count, read straight from the game log.
   - **Auto-accept invite requests** from chosen friends, with player-count limits and an optional custom invite message, plus a custom decline message for the ones it turns down *(signing in unlocks this)*.
   - **Status automations**: flip to *Ask Me* or *Busy* as your world fills up.
+  - **Sleeping pose**: lie your avatar down to match how you're really lying, via a GoGo Loco preset or your own OSC.
   - **In-headset toasts** when an invite is accepted or your status changes, so you know what happened without leaving VR.
+- **🛟 Auto-sleep safety net**: if you doze off on your own (motion detection), it can mute your mic and pose your avatar so you're not a muted pretzel, skipping it if you're already set up (FBT trackers on, or already posed). A manual sleep never touches any of it.
 - **🖥️ Run commands**: run a shell command or app on each phase: smart lights, a notification, suspend, anything.
 - **📡 OSC automations**: send sequences of OSC messages on each phase (avatar toggles, other apps, and so on).
 
@@ -70,6 +72,8 @@ This produces a `.rpm`, `.deb`, and `.AppImage` in `desktop/src-tauri/target/rel
 2. *(Optional)* Sign in under **Settings → VRChat Account** to unlock auto-accept and status automations. Your password is never stored, the session token is kept in your system keyring.
 3. Put on your headset; the overlay opens automatically. **Double-tap A** on the right controller to open the quick menu (point + trigger to click, grip to move it).
 4. *(Optional)* For motion-based sleep, turn it on under **Settings → Sleep Detection**, then calibrate in-headset: open the menu → **Calibrate sleep pose**, lie the way you sleep, and capture.
+
+NemuriXR shows a banner when a new release is available; the version and a manual check live under **Settings → General**.
 
 ## Bigscreen Beyond
 
