@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { app } from "$lib/state.svelte";
   import WindowControls from "./WindowControls.svelte";
 
   interface Tab {
@@ -23,6 +24,7 @@
       />
     </svg>
     <span class="name">Nemuri<b>XR</b></span>
+    {#if app.version}<span class="ver">v{app.version}</span>{/if}
   </div>
 
   <nav class="tabs">
@@ -66,6 +68,13 @@
   }
   .name b {
     color: hsl(var(--primary));
+  }
+  .ver {
+    font-size: 11px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    align-self: flex-end;
+    padding-bottom: 2px;
   }
   .tabs {
     display: flex;

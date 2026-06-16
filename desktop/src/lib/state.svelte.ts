@@ -1,7 +1,7 @@
 // Shared reactive state (Svelte 5 runes). Polls the overlay/core over the Tauri
 // IPC bridge; edits flow back via `save()` (debounced).
-import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends, beyondStatus } from "./api";
-import type { BeyondStatus } from "./api";
+import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends, beyondStatus, appVersion, checkUpdate } from "./api";
+import type { BeyondStatus, UpdateInfo } from "./api";
 import type { Config, Friend, LoginStatus, SleepPhase, State } from "./types";
 
 const ls = typeof localStorage !== "undefined" ? localStorage : null;
@@ -24,6 +24,10 @@ export const app = $state<{
   friendNames: Record<string, string>;
   /** Bigscreen Beyond HID access status (for the udev-rule prompt). */
   beyondStatus: BeyondStatus;
+  /** App version string (e.g. "0.3.0"). */
+  version: string;
+  /** A newer release, if one is available. */
+  update: UpdateInfo | null;
 }>({
   config: null,
   state: null,
@@ -32,6 +36,8 @@ export const app = $state<{
   vrchatFriends: [],
   friendNames: loadNames(),
   beyondStatus: "absent",
+  version: "",
+  update: null,
 });
 
 function persistNames() {
@@ -75,6 +81,22 @@ export async function checkBeyond() {
     app.beyondStatus = await beyondStatus();
   } catch {
     // ignore — leave the last known status
+  }
+}
+
+/** Load the app version, and check GitHub for a newer release (best-effort). */
+export async function loadVersion() {
+  try {
+    app.version = await appVersion();
+  } catch {
+    /* ignore */
+  }
+}
+export async function checkForUpdate() {
+  try {
+    app.update = await checkUpdate();
+  } catch {
+    app.update = null;
   }
 }
 
@@ -134,6 +156,9 @@ export function startPolling() {
   // Beyond status changes rarely (plug/unplug) — poll it slowly.
   checkBeyond();
   beyondTimer = setInterval(checkBeyond, 5000);
+  // One-shot on launch.
+  loadVersion();
+  checkForUpdate();
 }
 
 export function stopPolling() {

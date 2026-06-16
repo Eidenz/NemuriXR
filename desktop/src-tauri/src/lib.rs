@@ -25,6 +25,7 @@ mod overlay_launcher;
 mod schedule;
 mod sound;
 mod udev;
+mod update;
 mod vrchat;
 mod vrchat_api;
 mod vrchat_feature;
@@ -365,6 +366,18 @@ fn launch_overlay(child: tauri::State<OverlayChild>) -> bool {
     overlay_launcher::launch_now(&child)
 }
 
+/// The app version (for display in the UI).
+#[tauri::command]
+fn app_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Check GitHub for a newer release (None if up to date / offline).
+#[tauri::command]
+async fn check_update() -> Result<Option<update::UpdateInfo>, String> {
+    tauri::async_runtime::spawn_blocking(update::check).await.map_err(|e| e.to_string())
+}
+
 /// Beyond HID access status: "absent" | "needs_rule" | "ready".
 #[tauri::command]
 fn beyond_status() -> &'static str {
@@ -485,6 +498,8 @@ pub fn run() {
             test_command,
             test_alarm,
             launch_overlay,
+            app_version,
+            check_update,
             beyond_status,
             beyond_rule_text,
             install_beyond_rule,

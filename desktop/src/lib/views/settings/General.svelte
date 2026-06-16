@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { app, save, checkBeyond } from "$lib/state.svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { app, save, checkBeyond, checkForUpdate } from "$lib/state.svelte";
   import { launchOverlay, installBeyondRule, beyondRuleText } from "$lib/api";
   import GlassCard from "$lib/components/GlassCard.svelte";
   import Toggle from "$lib/components/Toggle.svelte";
@@ -44,6 +45,20 @@
   async function toggleRule() {
     showRule = !showRule;
     if (showRule && !ruleText) ruleText = await beyondRuleText();
+  }
+
+  // --- Updates ---
+  let checking = $state(false);
+  let checkedMsg = $state<string | null>(null);
+  async function recheck() {
+    checking = true;
+    checkedMsg = null;
+    await checkForUpdate();
+    checking = false;
+    if (!app.update) checkedMsg = "You're on the latest version.";
+  }
+  function viewRelease() {
+    if (app.update?.url) openUrl(app.update.url);
   }
 
   onMount(checkBeyond);
@@ -121,6 +136,32 @@
           <span class="d">Stop the game receiving controller input while you point at the in-headset panels</span>
         </div>
         <Toggle bind:checked={app.config.block_game_input} label="Block game input" onchange={save} />
+      </div>
+    </div>
+  </GlassCard>
+
+  <GlassCard title="About">
+    <div class="rows">
+      <div class="row">
+        <div class="txt">
+          <span class="t">NemuriXR v{app.version}</span>
+          <span class="d">
+            {#if app.update}
+              Update available: v{app.update.version}
+            {:else if checkedMsg}
+              {checkedMsg}
+            {:else}
+              Check GitHub for a newer release.
+            {/if}
+          </span>
+        </div>
+        {#if app.update}
+          <button class="btn tonal state-layer" onclick={viewRelease}>View release</button>
+        {:else}
+          <button class="btn tonal state-layer" disabled={checking} onclick={recheck}>
+            {checking ? "Checking…" : "Check for updates"}
+          </button>
+        {/if}
       </div>
     </div>
   </GlassCard>

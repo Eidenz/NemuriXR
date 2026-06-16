@@ -13,6 +13,14 @@ export const applyAudio = (which: SleepPhase) => invoke("apply_audio", { which }
 export const testCommand = (which: SleepPhase) => invoke("test_command", { which });
 export const launchOverlay = () => invoke<boolean>("launch_overlay");
 
+// Version + updates
+export interface UpdateInfo {
+  version: string;
+  url: string;
+}
+export const appVersion = () => invoke<string>("app_version");
+export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
+
 // Bigscreen Beyond udev rule
 export type BeyondStatus = "absent" | "needs_rule" | "ready";
 export const beyondStatus = () => invoke<BeyondStatus>("beyond_status");

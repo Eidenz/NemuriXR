@@ -3,6 +3,7 @@
   import { app, startPolling, stopPolling } from "$lib/state.svelte";
   import Backdrop from "$lib/components/Backdrop.svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
+  import UpdateBanner from "$lib/components/UpdateBanner.svelte";
   import BeyondRuleModal from "$lib/components/BeyondRuleModal.svelte";
   import VrchatLive from "$lib/components/VrchatLive.svelte";
   import StatusView from "$lib/views/StatusView.svelte";
@@ -75,6 +76,7 @@
     onChange={(id) => (active = id)}
     connected={app.state?.overlay_running ?? false}
   />
+  <UpdateBanner />
   <main class="main">
     {#if sections.length}
       <aside class="subnav glass">
