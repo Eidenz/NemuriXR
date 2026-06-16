@@ -21,12 +21,31 @@ export interface PosePreset {
 export const POSE_PRESETS: PosePreset[] = [
   {
     id: "gogo_loco",
-    label: "GoGo Loco (1.8.0+)",
+    label: "GoGo Loco",
     lock_feet: true,
-    on_back: [i("/avatar/parameters/VRCEmote", 214), f("/avatar/parameters/Go/Float", -1.0)],
-    on_front: [i("/avatar/parameters/VRCEmote", 214), f("/avatar/parameters/Go/Float", -0.75)],
-    on_left: [i("/avatar/parameters/VRCEmote", 214), f("/avatar/parameters/Go/Float", -0.6)],
-    on_right: [i("/avatar/parameters/VRCEmote", 214), f("/avatar/parameters/Go/Float", -0.4)],
+    on_back: [
+      i("/avatar/parameters/Go/VRCEmote", 237),
+      f("/avatar/parameters/Go/Float", 0.04),
+      f("/avatar/parameters/Go/PoseRadial", 0.5),
+    ],
+    // No dedicated face-down pose in GoGo; fall back to lying on back.
+    on_front: [
+      i("/avatar/parameters/Go/VRCEmote", 237),
+      f("/avatar/parameters/Go/Float", 0.04),
+      f("/avatar/parameters/Go/PoseRadial", 0.5),
+    ],
+    on_left: [
+      i("/avatar/parameters/Go/VRCEmote", 243),
+      f("/avatar/parameters/Go/Float", 0.03),
+      b("/avatar/parameters/Go/Mirror", false),
+      f("/avatar/parameters/Go/PoseRadial", 0.0),
+    ],
+    on_right: [
+      i("/avatar/parameters/Go/VRCEmote", 243),
+      f("/avatar/parameters/Go/Float", 0.03),
+      b("/avatar/parameters/Go/Mirror", true),
+      f("/avatar/parameters/Go/PoseRadial", 0.0),
+    ],
     foot_lock: [b("/avatar/parameters/Go/Stationary", true)],
     foot_unlock: [b("/avatar/parameters/Go/Stationary", false)],
   },

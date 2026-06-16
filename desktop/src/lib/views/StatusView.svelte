@@ -24,7 +24,7 @@
     </div>
   </button>
 
-  <button class="prep glass" class:on={phase === "prepare"} onclick={() => setSleepPhase("prepare")}>
+  <button class="prep glass" class:on={phase === "prepare"} onclick={() => setSleepPhase(phase === "prepare" ? "awake" : "prepare")}>
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
       <path fill="currentColor" d="M12.7 2a8 8 0 1 0 9.3 9.3 7 7 0 0 1-9.3-9.3Z" />
     </svg>

@@ -52,10 +52,12 @@ fn value0(node: &Value) -> Option<&Value> {
     node.get("VALUE").and_then(|v| v.as_array()).and_then(|a| a.first())
 }
 
-/// Are you currently in a GoGo Loco lying pose? (VRCEmote == 214.)
+/// Are you currently in a GoGo Loco lying pose? (VRCEmote 237 = on back,
+/// 243 = on side.)
 pub fn in_gogo_pose(http: SocketAddr) -> Option<bool> {
-    let node = get_node(http, "/avatar/parameters/VRCEmote")?;
-    Some(value0(&node).and_then(Value::as_i64) == Some(214))
+    let node = get_node(http, "/avatar/parameters/Go/VRCEmote")?;
+    let emote = value0(&node).and_then(Value::as_i64);
+    Some(matches!(emote, Some(237) | Some(243)))
 }
 
 /// Your current in-game mic mute state (the `MuteSelf` parameter), if readable.

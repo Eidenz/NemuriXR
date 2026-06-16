@@ -131,9 +131,10 @@ fn home(ui: &mut egui::Ui, phase: SleepPhase, clock: &str, detection_enabled: bo
     }
     ui.add_space(10.0);
 
-    // Prepare-to-sleep (highlighted while preparing).
+    // Prepare-to-sleep (highlighted while preparing); tapping it again wakes.
     if wide_button(ui, icons::BED, "Prepare to sleep", phase == SleepPhase::Prepare) {
-        *action = MenuAction::SetPhase(SleepPhase::Prepare);
+        let target = if phase == SleepPhase::Prepare { SleepPhase::Awake } else { SleepPhase::Prepare };
+        *action = MenuAction::SetPhase(target);
     }
     ui.add_space(8.0);
 
