@@ -220,7 +220,7 @@ fn automations(ui: &mut egui::Ui, cfg: &mut Config, changed: &mut bool, action: 
     ui.separator();
     ui.add_space(10.0);
 
-    *changed |= toggle_row(ui, icons::MOON, "Auto-Sleep", "Enter sleep at a set time", &mut cfg.sleep.schedule_enabled);
+    *changed |= toggle_row(ui, icons::PERSON_ARMS_SPREAD, "Sleeping Pose", "Pose your avatar while asleep", &mut cfg.vrchat.sleeping_pose.enabled);
     *changed |= toggle_row(ui, icons::PERSON_SIMPLE_TAI_CHI, "Sleep Detection", "Sleep when you stay still", &mut cfg.sleep.detection_enabled);
     *changed |= toggle_row(ui, icons::SUN, "Brightness on Sleep/Wake", "Dim the headset when you sleep", &mut cfg.brightness.enabled);
     *changed |= toggle_row(ui, icons::ENVELOPE, "Auto-Accept Invites", "Accept invite requests automatically", &mut cfg.vrchat.auto_accept.enabled);
