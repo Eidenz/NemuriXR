@@ -195,6 +195,26 @@ pub struct VrchatConfig {
     pub auto_accept: AutoAcceptConfig,
     pub join_notifications: JoinNotifyConfig,
     pub status_automations: StatusConfig,
+    pub sleeping_pose: SleepingPoseConfig,
+}
+
+/// While asleep, send OSC to lie your avatar in the direction you're physically
+/// lying (back/front/left/right), via a preset (GoGo Loco, …) or custom OSC.
+/// Reuses the OSC target (host/port/OSCQuery) from `OscConfig`.
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SleepingPoseConfig {
+    pub enabled: bool,
+    /// UI hint for which preset is loaded ("gogo_loco" | "gorone" | "custom").
+    pub preset: String,
+    /// Lock the avatar's feet so it doesn't slide when the pose changes.
+    pub lock_feet: bool,
+    pub on_back: Vec<OscMessage>,
+    pub on_front: Vec<OscMessage>,
+    pub on_left: Vec<OscMessage>,
+    pub on_right: Vec<OscMessage>,
+    pub foot_lock: Vec<OscMessage>,
+    pub foot_unlock: Vec<OscMessage>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

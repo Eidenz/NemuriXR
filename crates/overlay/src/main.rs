@@ -27,10 +27,10 @@ use openxr as xr;
 
 use blocker::Blocker;
 use client::{Detection, EngineLink};
-use detector::{nearest_pose_deg, Detector, Tick};
+use detector::{classify_position, nearest_pose_deg, Detector, Tick};
 use mathx::{gravity_local, locate_pose};
 use nemurixr_core::config::SleepPose;
-use nemurixr_core::SleepPhase;
+use nemurixr_core::{SleepPhase, SleepPosition};
 use overlay::{front_pose, posef, Input, Laser, Panel, TargetId};
 use ui::{build_countdown, build_menu, build_toast, MenuAction, Screen};
 
@@ -111,6 +111,10 @@ fn run() -> Result<()> {
     // Event-toast state: the last notice seq we've shown, and the active toast.
     let mut last_notice_seq: Option<u64> = None;
     let mut toast: Option<(String, Instant)> = None;
+    // Sleeping-pose: last reported position + a debounce candidate so boundary
+    // jitter / rolling over doesn't thrash the avatar pose.
+    let mut last_position: Option<SleepPosition> = None;
+    let mut pending_position: Option<(SleepPosition, Instant)> = None;
 
     log::info!("NemuriXR overlay ready. Double-tap A (right) to open the menu; point to interact, grip to move it.");
 
@@ -236,6 +240,34 @@ fn run() -> Result<()> {
             Tick::Sleep => link.set_phase(SleepPhase::Sleep),
             Tick::Counting(s) => countdown_secs = Some(s),
             Tick::Idle => {}
+        }
+
+        // Sleeping-pose: while asleep, report which way you're lying so the engine
+        // can pose the avatar. A new position must hold ~1.5s before it commits,
+        // so rolling over / boundary jitter doesn't thrash the pose.
+        if link.sleeping_pose_enabled() && phase == SleepPhase::Sleep {
+            if let Some(g) = g_local {
+                let pos = classify_position(g);
+                if last_position == Some(pos) {
+                    pending_position = None;
+                } else {
+                    let stable = match pending_position {
+                        Some((p, since)) if p == pos => since.elapsed() >= Duration::from_millis(1500),
+                        _ => {
+                            pending_position = Some((pos, Instant::now()));
+                            false
+                        }
+                    };
+                    if stable {
+                        last_position = Some(pos);
+                        pending_position = None;
+                        link.set_sleeping_position(pos);
+                    }
+                }
+            }
+        } else {
+            last_position = None;
+            pending_position = None;
         }
 
         // An in-progress pose capture only makes sense on the calibrate screen.

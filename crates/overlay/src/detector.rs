@@ -7,6 +7,7 @@
 use std::time::{Duration, Instant};
 
 use nemurixr_core::config::Sensitivity;
+use nemurixr_core::SleepPosition;
 use openxr as xr;
 
 use crate::mathx::qf;
@@ -88,6 +89,29 @@ impl Detector {
 fn angle_between_deg(a: [f32; 4], b: [f32; 4]) -> f32 {
     let dot = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]).abs().clamp(0.0, 1.0);
     2.0 * dot.acos() * 180.0 / std::f32::consts::PI
+}
+
+/// Classify which way the head is lying from the head-local gravity vector
+/// (yaw-invariant). The canonical directions are ~90° apart, so nearest-by-dot is
+/// reliable. `Upright` means not lying down.
+pub fn classify_position(g: [f32; 3]) -> SleepPosition {
+    const REFS: [([f32; 3], SleepPosition); 5] = [
+        ([0.0, -1.0, 0.0], SleepPosition::Upright),
+        ([0.0, 0.0, 1.0], SleepPosition::Back),
+        ([0.0, 0.0, -1.0], SleepPosition::Front),
+        ([-1.0, 0.0, 0.0], SleepPosition::Left),
+        ([1.0, 0.0, 0.0], SleepPosition::Right),
+    ];
+    let mut best = SleepPosition::Upright;
+    let mut best_dot = f32::MIN;
+    for (v, pos) in REFS {
+        let d = g[0] * v[0] + g[1] * v[1] + g[2] * v[2];
+        if d > best_dot {
+            best_dot = d;
+            best = pos;
+        }
+    }
+    best
 }
 
 /// Smallest angle (degrees) between a head-local gravity vector and any

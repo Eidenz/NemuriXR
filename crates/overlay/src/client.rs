@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use nemurixr_core::config::Sensitivity;
 use nemurixr_core::ipc::Client;
-use nemurixr_core::{Config, SleepPhase, State};
+use nemurixr_core::{Config, SleepPhase, SleepPosition, State};
 
 /// The sleep-detection settings the overlay needs each frame.
 pub struct Detection {
@@ -26,6 +26,7 @@ pub struct Detection {
 enum Cmd {
     SetPhase(SleepPhase),
     SetConfig(Config),
+    SetSleepingPosition(SleepPosition),
 }
 
 struct LinkState {
@@ -62,6 +63,15 @@ impl EngineLink {
 
     pub fn block_game_input(&self) -> bool {
         self.shared.lock().unwrap().config.block_game_input
+    }
+
+    pub fn sleeping_pose_enabled(&self) -> bool {
+        self.shared.lock().unwrap().config.vrchat.sleeping_pose.enabled
+    }
+
+    /// Report the current lying position to the engine (it sends the avatar OSC).
+    pub fn set_sleeping_position(&self, position: SleepPosition) {
+        let _ = self.tx.send(Cmd::SetSleepingPosition(position));
     }
 
     pub fn detection(&self) -> Detection {
@@ -118,6 +128,7 @@ fn pump(c: &mut Client, shared: &Arc<Mutex<LinkState>>, rx: &Receiver<Cmd>) -> b
             let r = match cmd {
                 Cmd::SetPhase(p) => c.set_phase(p),
                 Cmd::SetConfig(cfg) => c.set_config(cfg),
+                Cmd::SetSleepingPosition(pos) => c.set_sleeping_position(pos),
             };
             if r.is_err() {
                 return false;

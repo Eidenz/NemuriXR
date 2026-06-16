@@ -11,6 +11,8 @@ export const applyBrightness = (which: SleepPhase) => invoke("apply_brightness",
 export const sendOsc = (which: SleepPhase) => invoke("send_osc", { which });
 export const applyAudio = (which: SleepPhase) => invoke("apply_audio", { which });
 export const testCommand = (which: SleepPhase) => invoke("test_command", { which });
+export const testSleepingPose = (which: "back" | "front" | "left" | "right") =>
+  invoke("test_sleeping_pose", { which });
 export const launchOverlay = () => invoke<boolean>("launch_overlay");
 
 // Version + updates

@@ -14,9 +14,9 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
 
-use nemurixr_core::config::{AudioLevel, BrightnessLevel};
+use nemurixr_core::config::{AudioLevel, BrightnessLevel, OscMessage};
 use nemurixr_core::ipc::{self, Request, Response};
-use nemurixr_core::{Config, SleepPhase, State};
+use nemurixr_core::{Config, SleepPhase, SleepPosition, State};
 
 mod audio;
 mod brightness;
@@ -100,6 +100,54 @@ impl Engine {
         }
     }
 
+    /// Send the avatar OSC for a lying position (unlock feet → pose → re-lock
+    /// after a release window, so the pose change registers without sliding).
+    fn apply_sleeping_pose(&self, position: SleepPosition) {
+        let sp = &self.config.vrchat.sleeping_pose;
+        if !sp.enabled {
+            return;
+        }
+        let pose = match position {
+            SleepPosition::Back => &sp.on_back,
+            SleepPosition::Front => &sp.on_front,
+            SleepPosition::Left => &sp.on_left,
+            SleepPosition::Right => &sp.on_right,
+            SleepPosition::Upright => return, // not lying down — leave the avatar
+        };
+        let mut seq: Vec<OscMessage> = Vec::new();
+        if sp.lock_feet {
+            seq.extend(sp.foot_unlock.iter().cloned());
+        }
+        seq.extend(pose.iter().cloned());
+        if sp.lock_feet && !sp.foot_lock.is_empty() {
+            let mut lock = sp.foot_lock.clone();
+            lock[0].delay_ms = lock[0].delay_ms.max(600); // re-lock after a window
+            seq.extend(lock);
+        }
+        if seq.is_empty() {
+            return;
+        }
+        match osc::resolve_target(&self.config.osc, self.osc_target) {
+            Some(t) => osc::send_sequence(t, seq),
+            None => log::warn!("sleeping pose: no OSC target; skipping"),
+        }
+    }
+
+    /// Lock/unlock the avatar's feet (on sleep enter / wake), if configured.
+    fn sleeping_pose_feet(&self, lock: bool) {
+        let sp = &self.config.vrchat.sleeping_pose;
+        if !sp.enabled || !sp.lock_feet {
+            return;
+        }
+        let msgs = if lock { sp.foot_lock.clone() } else { sp.foot_unlock.clone() };
+        if msgs.is_empty() {
+            return;
+        }
+        if let Some(t) = osc::resolve_target(&self.config.osc, self.osc_target) {
+            osc::send_sequence(t, msgs);
+        }
+    }
+
     /// Fade brightness/fan into `level` over its transition time (cancelable).
     fn fade_brightness(&mut self, level: BrightnessLevel) {
         self.brightness = brightness::detect();
@@ -162,6 +210,12 @@ impl Engine {
         }
         self.send_osc(phase);
         self.run_command(phase);
+        // Sleeping-pose feet: lock on sleep, unlock on wake.
+        match phase {
+            SleepPhase::Sleep => self.sleeping_pose_feet(true),
+            SleepPhase::Awake => self.sleeping_pose_feet(false),
+            SleepPhase::Prepare => {}
+        }
         // Future: VRChat status automations also fire here.
     }
 
@@ -290,6 +344,19 @@ fn apply_audio(engine: tauri::State<Shared>, which: String) {
     let g = engine.lock().unwrap();
     let level = g.audio_level(phase_from_str(&which));
     g.apply_audio(level);
+}
+
+/// Send a sleeping-pose now (preview). `which` is back/front/left/right.
+#[tauri::command]
+fn test_sleeping_pose(engine: tauri::State<Shared>, which: String) {
+    let pos = match which.as_str() {
+        "back" => SleepPosition::Back,
+        "front" => SleepPosition::Front,
+        "left" => SleepPosition::Left,
+        "right" => SleepPosition::Right,
+        _ => SleepPosition::Upright,
+    };
+    engine.lock().unwrap().apply_sleeping_pose(pos);
 }
 
 /// Run a phase's command now (preview). `which` is awake/prepare/sleep.
@@ -475,6 +542,10 @@ pub fn run() {
                     g.set_phase(phase);
                     Response::Ok
                 }
+                Request::SetSleepingPosition { position } => {
+                    g.apply_sleeping_pose(position);
+                    Response::Ok
+                }
             }
         }) {
             log::warn!("IPC server failed to start: {err} (overlay won't be able to connect)");
@@ -497,6 +568,7 @@ pub fn run() {
             test_sound,
             test_command,
             test_alarm,
+            test_sleeping_pose,
             launch_overlay,
             app_version,
             check_update,

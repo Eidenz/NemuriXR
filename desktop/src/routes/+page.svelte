@@ -13,6 +13,7 @@
   import JoinNotifications from "$lib/views/vrchat/JoinNotifications.svelte";
   import AutoAccept from "$lib/views/vrchat/AutoAccept.svelte";
   import StatusAutomations from "$lib/views/vrchat/StatusAutomations.svelte";
+  import SleepingPose from "$lib/views/vrchat/SleepingPose.svelte";
   import Account from "$lib/views/settings/Account.svelte";
   import Schedule from "$lib/views/settings/Schedule.svelte";
   import SleepDetection from "$lib/views/settings/SleepDetection.svelte";
@@ -39,6 +40,7 @@
         { id: "join", label: "Join Notifications" },
         { id: "autoaccept", label: "Auto-Accept" },
         { id: "statusauto", label: "Status Automations" },
+        { id: "sleepingpose", label: "Sleeping Pose" },
       ],
     },
     { id: "osc", label: "OSC" },
@@ -94,8 +96,10 @@
               <JoinNotifications />
             {:else if sub === "autoaccept"}
               <AutoAccept />
-            {:else}
+            {:else if sub === "statusauto"}
               <StatusAutomations />
+            {:else}
+              <SleepingPose />
             {/if}
           {:else if active === "settings"}
             {#if sub === "account"}

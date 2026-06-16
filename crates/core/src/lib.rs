@@ -10,4 +10,4 @@ pub mod ipc;
 pub mod state;
 
 pub use config::Config;
-pub use state::{SleepPhase, State};
+pub use state::{SleepPhase, SleepPosition, State};

@@ -83,11 +83,23 @@ export interface StatusConfig {
   at_or_above_status: VrcStatus;
   only_when_sleep: boolean;
 }
+export interface SleepingPoseConfig {
+  enabled: boolean;
+  preset: string; // "gogo_loco" | "gorone" | "custom"
+  lock_feet: boolean;
+  on_back: OscMessage[];
+  on_front: OscMessage[];
+  on_left: OscMessage[];
+  on_right: OscMessage[];
+  foot_lock: OscMessage[];
+  foot_unlock: OscMessage[];
+}
 export interface VrchatConfig {
   log_dir: string;
   auto_accept: AutoAcceptConfig;
   join_notifications: JoinNotifyConfig;
   status_automations: StatusConfig;
+  sleeping_pose: SleepingPoseConfig;
 }
 export type OscArg =
   | { kind: "bool"; value: boolean }
