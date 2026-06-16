@@ -24,6 +24,7 @@ mod osc;
 mod overlay_launcher;
 mod schedule;
 mod sound;
+mod udev;
 mod vrchat;
 mod vrchat_api;
 mod vrchat_feature;
@@ -364,6 +365,24 @@ fn launch_overlay(child: tauri::State<OverlayChild>) -> bool {
     overlay_launcher::launch_now(&child)
 }
 
+/// Beyond HID access status: "absent" | "needs_rule" | "ready".
+#[tauri::command]
+fn beyond_status() -> &'static str {
+    brightness::beyond_status()
+}
+
+/// The udev rule text (for the manual-install fallback shown in Settings).
+#[tauri::command]
+fn beyond_rule_text() -> String {
+    udev::rule_text()
+}
+
+/// Install the Beyond udev rule (prompts for authorization via pkexec).
+#[tauri::command]
+async fn install_beyond_rule() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(udev::install).await.map_err(|e| e.to_string())?
+}
+
 /// Friends list for the auto-accept whitelist picker. Async + spawn_blocking so
 /// the multi-page fetch runs off the main thread (no UI freeze); grabs the
 /// client + cookie under a brief lock, then fetches all pages without holding it.
@@ -466,6 +485,9 @@ pub fn run() {
             test_command,
             test_alarm,
             launch_overlay,
+            beyond_status,
+            beyond_rule_text,
+            install_beyond_rule,
             vrchat_login,
             vrchat_verify_2fa,
             vrchat_logout,

@@ -3,6 +3,7 @@
   import { app, startPolling, stopPolling } from "$lib/state.svelte";
   import Backdrop from "$lib/components/Backdrop.svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
+  import BeyondRuleModal from "$lib/components/BeyondRuleModal.svelte";
   import VrchatLive from "$lib/components/VrchatLive.svelte";
   import StatusView from "$lib/views/StatusView.svelte";
   import BrightnessView from "$lib/views/BrightnessView.svelte";
@@ -66,6 +67,7 @@
 </script>
 
 <Backdrop />
+<BeyondRuleModal />
 <div class="app">
   <TitleBar
     {active}

@@ -41,6 +41,23 @@ pub fn name(b: Backend) -> Option<String> {
     }
 }
 
+/// Whether a Bigscreen Beyond is connected and whether we can talk to its HID:
+/// "absent" (none found), "needs_rule" (found but not writable — udev rule
+/// missing), or "ready" (found and writable).
+pub fn beyond_status() -> &'static str {
+    use std::fs::OpenOptions;
+    match beyond::find_device() {
+        None => "absent",
+        Some(path) => {
+            if OpenOptions::new().read(true).write(true).open(&path).is_ok() {
+                "ready"
+            } else {
+                "needs_rule"
+            }
+        }
+    }
+}
+
 /// An open handle to the backend, reused across the steps of a fade.
 pub enum Session {
     Beyond(PathBuf),

@@ -13,6 +13,12 @@ export const applyAudio = (which: SleepPhase) => invoke("apply_audio", { which }
 export const testCommand = (which: SleepPhase) => invoke("test_command", { which });
 export const launchOverlay = () => invoke<boolean>("launch_overlay");
 
+// Bigscreen Beyond udev rule
+export type BeyondStatus = "absent" | "needs_rule" | "ready";
+export const beyondStatus = () => invoke<BeyondStatus>("beyond_status");
+export const beyondRuleText = () => invoke<string>("beyond_rule_text");
+export const installBeyondRule = () => invoke("install_beyond_rule");
+
 export type MessageKind = "message" | "requestResponse";
 
 // VRChat account

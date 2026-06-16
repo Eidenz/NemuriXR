@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { app, save } from "$lib/state.svelte";
-  import { launchOverlay } from "$lib/api";
+  import { onMount } from "svelte";
+  import { app, save, checkBeyond } from "$lib/state.svelte";
+  import { launchOverlay, installBeyondRule, beyondRuleText } from "$lib/api";
   import GlassCard from "$lib/components/GlassCard.svelte";
   import Toggle from "$lib/components/Toggle.svelte";
 
@@ -19,6 +20,33 @@
       launching = false;
     }
   }
+
+  // --- Bigscreen Beyond udev rule ---
+  let installing = $state(false);
+  let beyondError = $state<string | null>(null);
+  let showRule = $state(false);
+  let ruleText = $state("");
+
+  async function installRule() {
+    installing = true;
+    beyondError = null;
+    try {
+      await installBeyondRule();
+      await checkBeyond();
+      if (app.beyondStatus !== "ready") beyondError = "Installed, but no access yet — try replugging the headset.";
+    } catch (e) {
+      beyondError = String(e);
+    } finally {
+      installing = false;
+    }
+  }
+
+  async function toggleRule() {
+    showRule = !showRule;
+    if (showRule && !ruleText) ruleText = await beyondRuleText();
+  }
+
+  onMount(checkBeyond);
 </script>
 
 {#if app.config}
@@ -42,6 +70,48 @@
       </div>
     </div>
   </GlassCard>
+
+  <!-- Only relevant when a Beyond is actually connected. -->
+  {#if app.beyondStatus !== "absent"}
+    <GlassCard title="Bigscreen Beyond">
+      <div class="rows">
+        <div class="row">
+          <div class="txt">
+            <span class="t">Brightness & fan access</span>
+            <span class="d">
+              {#if app.beyondStatus === "ready"}
+                Ready — NemuriXR can control your Beyond.
+              {:else}
+                A Beyond is connected but needs a udev rule for brightness/fan control.
+              {/if}
+            </span>
+          </div>
+          {#if app.beyondStatus === "ready"}
+            <span class="ok">Ready ✓</span>
+          {:else}
+            <button class="btn tonal state-layer" disabled={installing} onclick={installRule}>
+              {installing ? "Installing…" : "Install rule"}
+            </button>
+          {/if}
+        </div>
+        {#if beyondError}
+          <p class="note err">{beyondError}</p>
+        {/if}
+        <div class="row">
+          <div class="txt">
+            <span class="t">Manual install</span>
+            <span class="d">Prefer to add the rule yourself? Show the udev rule to copy.</span>
+          </div>
+          <button class="btn tonal state-layer" onclick={toggleRule}>{showRule ? "Hide" : "Show rule"}</button>
+        </div>
+        {#if showRule}
+          <pre class="rule">{ruleText}</pre>
+          <p class="note">Save it to <code>/etc/udev/rules.d/70-nemurixr-beyond.rules</code>, then run
+            <code>sudo udevadm control --reload-rules &amp;&amp; sudo udevadm trigger</code>.</p>
+        {/if}
+      </div>
+    </GlassCard>
+  {/if}
 
   <GlassCard title="General">
     <div class="rows">
@@ -91,5 +161,36 @@
     padding: 0 16px;
     font-size: 13px;
     flex: none;
+  }
+  .ok {
+    color: hsl(140 50% 62%);
+    font-weight: 600;
+    font-size: 13.5px;
+    flex: none;
+  }
+  .note {
+    margin: 2px 0 0;
+    color: hsl(var(--muted-foreground));
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .note.err {
+    color: hsl(0 70% 68%);
+  }
+  .note code {
+    font-family: var(--font-mono, monospace);
+    font-size: 11.5px;
+  }
+  .rule {
+    margin: 4px 0 0;
+    padding: 10px 12px;
+    border-radius: var(--radius-s);
+    background: hsl(var(--glass-bg) / 0.5);
+    border: 1px solid hsl(var(--glass-border) / 0.1);
+    font-family: var(--font-mono, monospace);
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: hsl(var(--foreground));
   }
 </style>

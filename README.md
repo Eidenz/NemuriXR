@@ -73,13 +73,15 @@ This produces a `.rpm`, `.deb`, and `.AppImage` in `desktop/src-tauri/target/rel
 
 ## Bigscreen Beyond
 
-Brightness and fan control talk to the Beyond over HID, which needs a udev rule (the same one bsb-control uses):
+Brightness and fan control talk to the Beyond over HID, which needs a udev rule. When NemuriXR sees a Beyond it can't access, it offers to install the rule for you (you can also do it anytime from **Settings → General**) — you'll be asked to authorize the change.
+
+To add it manually instead:
 
 ```
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="35bd", ATTRS{idProduct}=="0101", MODE="0660", GROUP="wheel"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="35bd", ATTRS{idProduct}=="0101", TAG+="uaccess"
 ```
 
-Without it, or on any other headset, brightness falls back to libmonado and fan control isn't available.
+Save it to `/etc/udev/rules.d/70-nemurixr-beyond.rules`, then `sudo udevadm control --reload-rules && sudo udevadm trigger`. Without the rule (or on any other headset) brightness falls back to libmonado and fan control isn't available.
 
 ## Development
 

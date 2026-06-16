@@ -1,6 +1,7 @@
 // Shared reactive state (Svelte 5 runes). Polls the overlay/core over the Tauri
 // IPC bridge; edits flow back via `save()` (debounced).
-import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends } from "./api";
+import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends, beyondStatus } from "./api";
+import type { BeyondStatus } from "./api";
 import type { Config, Friend, LoginStatus, SleepPhase, State } from "./types";
 
 const ls = typeof localStorage !== "undefined" ? localStorage : null;
@@ -21,6 +22,8 @@ export const app = $state<{
   vrchatFriends: Friend[];
   /** id → display name cache, so whitelisted friends show names without a fetch. */
   friendNames: Record<string, string>;
+  /** Bigscreen Beyond HID access status (for the udev-rule prompt). */
+  beyondStatus: BeyondStatus;
 }>({
   config: null,
   state: null,
@@ -28,6 +31,7 @@ export const app = $state<{
   vrchatLogin: { logged_in: false, username: null },
   vrchatFriends: [],
   friendNames: loadNames(),
+  beyondStatus: "absent",
 });
 
 function persistNames() {
@@ -62,7 +66,17 @@ export async function loadVrchatLogin() {
 }
 
 let timer: ReturnType<typeof setInterval> | undefined;
+let beyondTimer: ReturnType<typeof setInterval> | undefined;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Refresh the Bigscreen Beyond access status (drives the udev-rule prompt). */
+export async function checkBeyond() {
+  try {
+    app.beyondStatus = await beyondStatus();
+  } catch {
+    // ignore — leave the last known status
+  }
+}
 
 export async function load() {
   try {
@@ -117,9 +131,14 @@ export function startPolling() {
   load();
   tick();
   timer = setInterval(tick, 1000);
+  // Beyond status changes rarely (plug/unplug) — poll it slowly.
+  checkBeyond();
+  beyondTimer = setInterval(checkBeyond, 5000);
 }
 
 export function stopPolling() {
   if (timer) clearInterval(timer);
   timer = undefined;
+  if (beyondTimer) clearInterval(beyondTimer);
+  beyondTimer = undefined;
 }
