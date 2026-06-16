@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { app, save, saveSoon } from "$lib/state.svelte";
+  import { app, save } from "$lib/state.svelte";
   import { testAlarm } from "$lib/api";
   import GlassCard from "$lib/components/GlassCard.svelte";
   import Toggle from "$lib/components/Toggle.svelte";
-  import Slider from "$lib/components/Slider.svelte";
 </script>
 
 {#if app.config}
@@ -25,8 +24,8 @@
   </GlassCard>
 
   <GlassCard
-    title="Gentle Wake-up"
-    desc="Automatically wake at a set time, easing brightness (and audio) back up like a sunrise, then optionally an alarm. Works on its own — you don't need auto-sleep enabled."
+    title="Auto-Wake"
+    desc="Automatically wake at a set time, with an optional alarm. Works without auto-sleep. Brightness eases in using the wake Fade time on the Brightness tab — same as a manual wake."
   >
     <div class="rows">
       <div class="row">
@@ -37,21 +36,10 @@
         <div class="txt"><span class="t">Wake up at</span></div>
         <input type="time" bind:value={sleep.wake_at} onchange={save} />
       </div>
-      <div class="row slider" class:dim={!sleep.wake.enabled}>
-        <Slider
-          label="Sunrise length"
-          suffix=" min"
-          min={0}
-          max={60}
-          editable
-          bind:value={sleep.wake.sunrise_minutes}
-          onchange={saveSoon}
-        />
-      </div>
       <div class="row" class:dim={!sleep.wake.enabled}>
         <div class="txt">
           <span class="t">Play an alarm sound</span>
-          <span class="d">Plays once the sunrise finishes</span>
+          <span class="d">Plays once you've woken</span>
         </div>
         <Toggle bind:checked={sleep.wake.alarm_enabled} label="Alarm" onchange={save} />
       </div>
@@ -84,9 +72,6 @@
   }
   .row:first-child {
     border-top: none;
-  }
-  .row.slider {
-    display: block;
   }
   .row.dim {
     opacity: 0.4;

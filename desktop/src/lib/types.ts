@@ -44,7 +44,6 @@ export interface SleepConfig {
 }
 export interface WakeConfig {
   enabled: boolean;
-  sunrise_minutes: number;
   alarm_enabled: boolean;
   alarm_sound: string;
 }

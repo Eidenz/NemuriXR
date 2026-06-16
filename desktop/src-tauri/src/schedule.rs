@@ -49,19 +49,22 @@ fn run(engine: Arc<Mutex<Engine>>) {
     }
 }
 
-/// Scheduled gentle wake-up: ramp brightness up (sunrise) + restore, then play
-/// the alarm after the sunrise finishes — but only if you're still awake (didn't
-/// go back to sleep). Only called when auto-wake is on.
+/// Scheduled wake: go to Awake (brightness eases in over the wake fade time),
+/// then play the alarm once that ramp finishes — but only if you're still awake
+/// (didn't go back to sleep). Only called when auto-wake is on.
 fn wake_up(engine: &Arc<Mutex<Engine>>) {
-    let wake = { engine.lock().unwrap().config.sleep.wake.clone() };
-    engine.lock().unwrap().begin_wake(&wake);
-    if wake.alarm_enabled {
+    let (alarm_enabled, alarm_sound, delay) = {
+        let g = engine.lock().unwrap();
+        let delay = if g.config.brightness.enabled { g.config.brightness.on_wake.transition_seconds as u64 } else { 0 };
+        (g.config.sleep.wake.alarm_enabled, g.config.sleep.wake.alarm_sound.clone(), delay)
+    };
+    engine.lock().unwrap().set_phase(SleepPhase::Awake);
+    if alarm_enabled {
         let engine = engine.clone();
-        let delay = Duration::from_secs(wake.sunrise_minutes as u64 * 60);
         std::thread::spawn(move || {
-            std::thread::sleep(delay);
+            std::thread::sleep(Duration::from_secs(delay));
             if engine.lock().unwrap().state.sleep_phase == SleepPhase::Awake {
-                crate::sound::play_notification("alarm", &wake.alarm_sound);
+                crate::sound::play_notification("alarm", &alarm_sound);
             }
         });
     }

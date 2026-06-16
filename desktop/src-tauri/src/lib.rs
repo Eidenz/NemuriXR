@@ -14,7 +14,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
 
-use nemurixr_core::config::{AudioLevel, BrightnessLevel, WakeConfig};
+use nemurixr_core::config::{AudioLevel, BrightnessLevel};
 use nemurixr_core::ipc::{self, Request, Response};
 use nemurixr_core::{Config, SleepPhase, State};
 
@@ -188,24 +188,6 @@ impl Engine {
         });
     }
 
-    /// Gentle scheduled wake: ramp brightness up to the Awake level over the
-    /// sunrise time, and restore audio + OSC + command. The alarm sound is fired
-    /// by the scheduler once the sunrise finishes.
-    fn begin_wake(&mut self, wake: &WakeConfig) {
-        self.state.sleep_phase = SleepPhase::Awake;
-        log::info!("wake-up routine: {}-min sunrise", wake.sunrise_minutes);
-        if self.config.brightness.enabled {
-            let mut level = self.brightness_level(SleepPhase::Awake);
-            level.transition_seconds = wake.sunrise_minutes.saturating_mul(60);
-            self.fade_brightness(level);
-        }
-        if self.config.audio.enabled {
-            let level = self.audio_level(SleepPhase::Awake);
-            self.apply_audio(level);
-        }
-        self.send_osc(SleepPhase::Awake);
-        self.run_command(SleepPhase::Awake);
-    }
 
     /// Push a transient notice for the in-headset toast (auto-accept, status…).
     pub(crate) fn notify(&mut self, text: impl Into<String>) {

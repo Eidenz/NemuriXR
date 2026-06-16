@@ -123,9 +123,10 @@ fn home(ui: &mut egui::Ui, phase: SleepPhase, clock: &str, detection_enabled: bo
     });
     ui.add_space(14.0);
 
-    // The big card toggles between Awake and Sleep.
+    // The big card turns sleep on (from Awake or Prepare); only an active sleep
+    // toggles back to Awake.
     if sleep_card(ui, phase) {
-        let target = if phase == SleepPhase::Awake { SleepPhase::Sleep } else { SleepPhase::Awake };
+        let target = if phase == SleepPhase::Sleep { SleepPhase::Awake } else { SleepPhase::Sleep };
         *action = MenuAction::SetPhase(target);
     }
     ui.add_space(10.0);

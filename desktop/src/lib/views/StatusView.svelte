@@ -8,8 +8,9 @@
   const backend = $derived(app.state?.brightness_backend ?? null);
   const status = $derived(phase === "sleep" ? "Active" : phase === "prepare" ? "Preparing" : "Inactive");
 
-  // The big card toggles between Awake and Sleep.
-  const toggleCard = () => setSleepPhase(phase === "awake" ? "sleep" : "awake");
+  // The big card turns sleep on (from awake or prepare); only an active sleep
+  // toggles back to awake.
+  const toggleCard = () => setSleepPhase(phase === "sleep" ? "awake" : "sleep");
 </script>
 
 <div class="view">

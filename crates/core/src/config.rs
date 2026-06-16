@@ -71,10 +71,11 @@ pub struct SleepConfig {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WakeConfig {
+    /// Auto-wake at the scheduled wake time. Brightness eases in using the
+    /// brightness config's wake fade time (`on_wake.transition_seconds`), same as
+    /// a manual wake.
     pub enabled: bool,
-    /// Minutes over which to ramp brightness up to the Awake level.
-    pub sunrise_minutes: u32,
-    /// Play an alarm sound once the sunrise finishes.
+    /// Play an alarm sound once you've woken.
     pub alarm_enabled: bool,
     /// Alarm sound file ("" = bundled default chime).
     pub alarm_sound: String,
@@ -283,7 +284,7 @@ impl Default for SleepConfig {
 
 impl Default for WakeConfig {
     fn default() -> Self {
-        Self { enabled: false, sunrise_minutes: 10, alarm_enabled: false, alarm_sound: String::new() }
+        Self { enabled: false, alarm_enabled: false, alarm_sound: String::new() }
     }
 }
 
