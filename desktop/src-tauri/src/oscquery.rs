@@ -52,12 +52,13 @@ fn value0(node: &Value) -> Option<&Value> {
     node.get("VALUE").and_then(|v| v.as_array()).and_then(|a| a.first())
 }
 
-/// Are you currently in a GoGo Loco lying pose? (VRCEmote 237 = on back,
-/// 243 = on side.)
+/// Are you currently in a GoGo Loco lying pose? (237 = back, 239 = front, 243 =
+/// side.) NOTE: GoGo's pose emotes are momentary (pulse back to 0), so this only
+/// catches the brief trigger window — it's a weak signal, not reliable.
 pub fn in_gogo_pose(http: SocketAddr) -> Option<bool> {
     let node = get_node(http, "/avatar/parameters/Go/VRCEmote")?;
     let emote = value0(&node).and_then(Value::as_i64);
-    Some(matches!(emote, Some(237) | Some(243)))
+    Some(matches!(emote, Some(237) | Some(239) | Some(243)))
 }
 
 /// Your current in-game mic mute state (the `MuteSelf` parameter), if readable.
