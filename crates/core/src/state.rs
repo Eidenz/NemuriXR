@@ -22,6 +22,17 @@ impl SleepPhase {
     }
 }
 
+/// How a sleep transition was triggered — lets automations (e.g. the auto-sleep
+/// safety net) act only when you fell asleep on your own, not on a manual toggle.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SleepTrigger {
+    #[default]
+    Manual,
+    Schedule,
+    Detection,
+}
+
 /// Which way you're physically lying, for the VRChat sleeping-pose automation.
 /// `Upright` means "not in a lying pose" (no avatar pose sent).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]

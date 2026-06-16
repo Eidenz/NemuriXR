@@ -66,6 +66,20 @@ fn sink_description(index: i64) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Mute/unmute the microphone device VRChat uses (or the default source). Used
+/// by the auto-sleep safety net.
+pub fn set_mic_muted(muted: bool) {
+    if !pactl_available() {
+        return;
+    }
+    let m = if muted { "1" } else { "0" };
+    match vrchat_source() {
+        Some(idx) => run_pactl(&["set-source-mute", &idx.to_string(), m]),
+        None => run_pactl(&["set-source-mute", "@DEFAULT_SOURCE@", m]),
+    };
+    log::info!("safety net: mic device {}", if muted { "muted" } else { "unmuted" });
+}
+
 /// Apply an audio level. Returns a human description of the output device that
 /// was controlled (for the UI), or None if nothing was set / pactl is absent.
 pub fn apply(level: &AudioLevel) -> Option<String> {

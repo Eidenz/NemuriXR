@@ -21,6 +21,7 @@ pub struct Config {
     pub vrchat: VrchatConfig,
     pub osc: OscConfig,
     pub commands: CommandsConfig,
+    pub safety_net: SafetyNetConfig,
 
     // Never sent over the wire; defaults to the standard path when a config is
     // deserialized (e.g. received over IPC) so `save()` always has a target.
@@ -155,6 +156,40 @@ pub struct CommandsConfig {
     pub on_wake: String,
     pub on_prepare: String,
     pub on_sleep: String,
+}
+
+// ---- Auto-sleep safety net ------------------------------------------------
+
+/// Actions that run ONLY when sleep was triggered automatically (by motion
+/// detection) — for when you doze off without setting yourself up. A manual
+/// sleep toggle never triggers these.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SafetyNetConfig {
+    pub enabled: bool,
+    /// Apply your VRChat sleeping-pose set (from `vrchat.sleeping_pose`).
+    pub pose: bool,
+    /// Skip the pose if FBT trackers are connected (you're posed already).
+    pub pose_skip_if_trackers: bool,
+    /// Re-pose even if you're already in a GoGo pose (default off: leave it).
+    pub pose_override_existing: bool,
+    /// Mute your VRChat mic in-game (OSC).
+    pub mute_ingame: bool,
+    /// Mute the microphone device (PipeWire/PulseAudio).
+    pub mute_device: bool,
+}
+
+impl Default for SafetyNetConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            pose: true,
+            pose_skip_if_trackers: true,
+            pose_override_existing: false,
+            mute_ingame: false,
+            mute_device: true,
+        }
+    }
 }
 
 // ---- Audio volume ---------------------------------------------------------
@@ -438,6 +473,7 @@ impl Default for Config {
             vrchat: VrchatConfig::default(),
             osc: OscConfig::default(),
             commands: CommandsConfig::default(),
+            safety_net: SafetyNetConfig::default(),
             path: config_path(),
         }
     }

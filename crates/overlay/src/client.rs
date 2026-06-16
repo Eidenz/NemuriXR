@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use nemurixr_core::config::Sensitivity;
 use nemurixr_core::ipc::Client;
-use nemurixr_core::{Config, SleepPhase, SleepPosition, State};
+use nemurixr_core::{Config, SleepPhase, SleepPosition, SleepTrigger, State};
 
 /// The sleep-detection settings the overlay needs each frame.
 pub struct Detection {
@@ -24,7 +24,7 @@ pub struct Detection {
 }
 
 enum Cmd {
-    SetPhase(SleepPhase),
+    SetPhase(SleepPhase, SleepTrigger),
     SetConfig(Config),
     SetSleepingPosition(SleepPosition),
 }
@@ -65,8 +65,11 @@ impl EngineLink {
         self.shared.lock().unwrap().config.block_game_input
     }
 
-    pub fn sleeping_pose_enabled(&self) -> bool {
-        self.shared.lock().unwrap().config.vrchat.sleeping_pose.enabled
+    /// True when the overlay should report the lying position — either the
+    /// continuous sleeping-pose feature is on, or the safety net may pose you.
+    pub fn report_position(&self) -> bool {
+        let g = self.shared.lock().unwrap();
+        g.config.vrchat.sleeping_pose.enabled || (g.config.safety_net.enabled && g.config.safety_net.pose)
     }
 
     /// Report the current lying position to the engine (it sends the avatar OSC).
@@ -90,9 +93,9 @@ impl EngineLink {
     }
 
     /// Optimistically reflect the change locally, then queue it for the engine.
-    pub fn set_phase(&self, phase: SleepPhase) {
+    pub fn set_phase(&self, phase: SleepPhase, trigger: SleepTrigger) {
         self.shared.lock().unwrap().state.sleep_phase = phase;
-        let _ = self.tx.send(Cmd::SetPhase(phase));
+        let _ = self.tx.send(Cmd::SetPhase(phase, trigger));
     }
 
     pub fn set_config(&self, config: Config) {
@@ -126,7 +129,7 @@ fn pump(c: &mut Client, shared: &Arc<Mutex<LinkState>>, rx: &Receiver<Cmd>) -> b
     loop {
         while let Ok(cmd) = rx.try_recv() {
             let r = match cmd {
-                Cmd::SetPhase(p) => c.set_phase(p),
+                Cmd::SetPhase(p, t) => c.set_phase(p, t),
                 Cmd::SetConfig(cfg) => c.set_config(cfg),
                 Cmd::SetSleepingPosition(pos) => c.set_sleeping_position(pos),
             };

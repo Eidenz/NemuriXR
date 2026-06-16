@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{Local, Timelike};
-use nemurixr_core::SleepPhase;
+use nemurixr_core::{SleepPhase, SleepTrigger};
 
 use crate::Engine;
 
@@ -31,7 +31,7 @@ fn run(engine: Arc<Mutex<Engine>>) {
                 if let Some(t) = sleep_at {
                     if crossed(p, now, t) {
                         log::info!("schedule: sleep at {:02}:{:02}", t / 60, t % 60);
-                        engine.lock().unwrap().set_phase(SleepPhase::Sleep);
+                        engine.lock().unwrap().set_phase(SleepPhase::Sleep, SleepTrigger::Schedule);
                     }
                 }
             }
@@ -58,7 +58,7 @@ fn wake_up(engine: &Arc<Mutex<Engine>>) {
         let delay = if g.config.brightness.enabled { g.config.brightness.on_wake.transition_seconds as u64 } else { 0 };
         (g.config.sleep.wake.alarm_enabled, g.config.sleep.wake.alarm_sound.clone(), delay)
     };
-    engine.lock().unwrap().set_phase(SleepPhase::Awake);
+    engine.lock().unwrap().set_phase(SleepPhase::Awake, SleepTrigger::Schedule);
     if alarm_enabled {
         let engine = engine.clone();
         std::thread::spawn(move || {

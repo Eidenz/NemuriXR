@@ -16,14 +16,17 @@ use tauri::{Manager, WindowEvent};
 
 use nemurixr_core::config::{AudioLevel, BrightnessLevel, OscMessage};
 use nemurixr_core::ipc::{self, Request, Response};
-use nemurixr_core::{Config, SleepPhase, SleepPosition, State};
+use nemurixr_core::{Config, SleepPhase, SleepPosition, SleepTrigger, State};
 
 mod audio;
 mod brightness;
 mod osc;
+mod oscquery;
 mod overlay_launcher;
+mod safety_net;
 mod schedule;
 mod sound;
+mod trackers;
 mod udev;
 mod update;
 mod vrchat;
@@ -51,6 +54,14 @@ pub(crate) struct Engine {
     fade_gen: Arc<AtomicU64>,
     /// Last audio output device an automation controlled (for the UI).
     audio_target: Arc<Mutex<Option<String>>>,
+    // Auto-sleep safety net runtime state (what it did this sleep, to revert).
+    safety_net_acted: bool,
+    safety_net_pose: bool,
+    safety_net_muted_device: bool,
+    safety_net_muted_ingame: bool,
+    /// Last lying position the overlay reported (so the safety net can pose you
+    /// the instant it activates, without waiting for the next position change).
+    last_position: SleepPosition,
 }
 
 impl Engine {
@@ -69,6 +80,11 @@ impl Engine {
             bright_current: Arc::new(Mutex::new(None)),
             fade_gen: Arc::new(AtomicU64::new(0)),
             audio_target: Arc::new(Mutex::new(None)),
+            safety_net_acted: false,
+            safety_net_pose: false,
+            safety_net_muted_device: false,
+            safety_net_muted_ingame: false,
+            last_position: SleepPosition::Upright,
         }
     }
 
@@ -102,11 +118,18 @@ impl Engine {
 
     /// Send the avatar OSC for a lying position (unlock feet → pose → re-lock
     /// after a release window, so the pose change registers without sliding).
+    /// Gated pose application (continuous feature, or an active safety net).
     fn apply_sleeping_pose(&self, position: SleepPosition) {
-        let sp = &self.config.vrchat.sleeping_pose;
-        if !sp.enabled {
+        if !self.config.vrchat.sleeping_pose.enabled && !self.safety_net_pose {
             return;
         }
+        self.send_pose(position);
+    }
+
+    /// Build + send the avatar OSC for a position, ungated (also used by the
+    /// "Test" buttons so you can preview without enabling the feature).
+    fn send_pose(&self, position: SleepPosition) {
+        let sp = &self.config.vrchat.sleeping_pose;
         let pose = match position {
             SleepPosition::Back => &sp.on_back,
             SleepPosition::Front => &sp.on_front,
@@ -131,6 +154,35 @@ impl Engine {
             Some(t) => osc::send_sequence(t, seq),
             None => log::warn!("sleeping pose: no OSC target; skipping"),
         }
+    }
+
+    /// Undo whatever the auto-sleep safety net did (mic unmute, foot unlock).
+    fn revert_safety_net(&mut self) {
+        if !self.safety_net_acted {
+            return;
+        }
+        if self.safety_net_muted_device {
+            audio::set_mic_muted(false);
+        }
+        if self.safety_net_muted_ingame {
+            if let Some(t) = osc::resolve_target(&self.config.osc, self.osc_target) {
+                osc::voice_toggle(t);
+            }
+        }
+        // Release feet if the safety net posed you (the continuous path unlocks
+        // itself via set_phase, but the safety net may have run with it off).
+        if self.safety_net_pose && self.config.vrchat.sleeping_pose.lock_feet {
+            let unlock = self.config.vrchat.sleeping_pose.foot_unlock.clone();
+            if !unlock.is_empty() {
+                if let Some(t) = osc::resolve_target(&self.config.osc, self.osc_target) {
+                    osc::send_sequence(t, unlock);
+                }
+            }
+        }
+        self.safety_net_acted = false;
+        self.safety_net_pose = false;
+        self.safety_net_muted_device = false;
+        self.safety_net_muted_ingame = false;
     }
 
     /// Lock/unlock the avatar's feet (on sleep enter / wake), if configured.
@@ -194,12 +246,16 @@ impl Engine {
         self.config.save();
     }
 
-    fn set_phase(&mut self, phase: SleepPhase) {
+    fn set_phase(&mut self, phase: SleepPhase, _trigger: SleepTrigger) {
         if self.state.sleep_phase == phase {
             return;
         }
         self.state.sleep_phase = phase;
-        log::info!("sleep phase -> {phase:?}");
+        log::info!("sleep phase -> {phase:?} ({_trigger:?})");
+        // Undo any safety-net actions when leaving sleep (however we wake).
+        if phase == SleepPhase::Awake {
+            self.revert_safety_net();
+        }
         if self.config.brightness.enabled {
             let level = self.brightness_level(phase);
             self.fade_brightness(level);
@@ -313,7 +369,7 @@ fn get_state(engine: tauri::State<Shared>) -> State {
 
 #[tauri::command]
 fn set_phase(engine: tauri::State<Shared>, phase: SleepPhase) {
-    engine.lock().unwrap().set_phase(phase);
+    engine.lock().unwrap().set_phase(phase, SleepTrigger::Manual);
 }
 
 fn phase_from_str(s: &str) -> SleepPhase {
@@ -356,7 +412,7 @@ fn test_sleeping_pose(engine: tauri::State<Shared>, which: String) {
         "right" => SleepPosition::Right,
         _ => SleepPosition::Upright,
     };
-    engine.lock().unwrap().apply_sleeping_pose(pos);
+    engine.lock().unwrap().send_pose(pos);
 }
 
 /// Run a phase's command now (preview). `which` is awake/prepare/sleep.
@@ -538,11 +594,16 @@ pub fn run() {
                     g.apply_config(config);
                     Response::Ok
                 }
-                Request::SetPhase { phase } => {
-                    g.set_phase(phase);
+                Request::SetPhase { phase, trigger } => {
+                    g.set_phase(phase, trigger);
+                    // Auto-sleep safety net runs only when you doze off (detection).
+                    if phase == SleepPhase::Sleep && trigger == SleepTrigger::Detection {
+                        safety_net::run(e.clone());
+                    }
                     Response::Ok
                 }
                 Request::SetSleepingPosition { position } => {
+                    g.last_position = position;
                     g.apply_sleeping_pose(position);
                     Response::Ok
                 }

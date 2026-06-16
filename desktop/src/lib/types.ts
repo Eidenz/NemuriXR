@@ -119,6 +119,14 @@ export interface OscConfig {
   on_prepare: OscMessage[];
   on_sleep: OscMessage[];
 }
+export interface SafetyNetConfig {
+  enabled: boolean;
+  pose: boolean;
+  pose_skip_if_trackers: boolean;
+  pose_override_existing: boolean;
+  mute_ingame: boolean;
+  mute_device: boolean;
+}
 export interface Config {
   block_game_input: boolean;
   auto_launch_overlay: boolean;
@@ -128,6 +136,7 @@ export interface Config {
   vrchat: VrchatConfig;
   osc: OscConfig;
   commands: CommandsConfig;
+  safety_net: SafetyNetConfig;
 }
 
 export type LoginOutcome =

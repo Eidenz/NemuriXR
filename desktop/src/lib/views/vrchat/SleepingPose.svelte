@@ -53,11 +53,14 @@
   >
     <div class="rows">
       <div class="row">
-        <div class="txt"><span class="t">Enable</span></div>
+        <div class="txt">
+          <span class="t">Pose continuously while asleep</span>
+          <span class="d">The pose set below is also used by the Safety Net — configure it even with this off</span>
+        </div>
         <Toggle bind:checked={sp.enabled} label="Sleeping pose" onchange={save} />
       </div>
 
-      <div class="row" class:dim={!sp.enabled}>
+      <div class="row">
         <div class="txt">
           <span class="t">Avatar system</span>
           <span class="d">Presets fill in the OSC; pick Custom to edit it yourself</span>
@@ -69,7 +72,7 @@
         </select>
       </div>
 
-      <div class="row" class:dim={!sp.enabled}>
+      <div class="row">
         <div class="txt">
           <span class="t">Lock feet (stop sliding)</span>
           <span class="d">Briefly releases and re-locks on each pose change</span>
@@ -77,7 +80,7 @@
         <Toggle bind:checked={sp.lock_feet} label="Lock feet" onchange={save} />
       </div>
 
-      <div class="row" class:dim={!sp.enabled || !sp.preset}>
+      <div class="row" class:dim={!sp.preset}>
         <div class="txt"><span class="t">Test a pose</span><span class="d">Send it to your avatar now</span></div>
         <div class="tests">
           <button class="btn tonal state-layer" onclick={() => testSleepingPose("back")}>Back</button>
@@ -89,7 +92,7 @@
     </div>
   </GlassCard>
 
-  {#if sp.enabled && sp.preset === "custom"}
+  {#if sp.preset === "custom"}
     {#each positions as pos (pos.key)}
       <GlassCard title={pos.title}>
         <div class="msgs">
@@ -123,7 +126,7 @@
         </div>
       </div>
     </GlassCard>
-  {:else if sp.enabled && sp.preset}
+  {:else if sp.preset}
     <p class="note">
       Using the <strong>{POSE_PRESETS.find((p) => p.id === sp.preset)?.label ?? sp.preset}</strong> preset — it sends the
       right avatar parameters for each side automatically. Switch to <strong>Custom</strong> above to tweak the OSC.

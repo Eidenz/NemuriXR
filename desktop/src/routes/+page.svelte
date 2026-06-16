@@ -14,6 +14,7 @@
   import AutoAccept from "$lib/views/vrchat/AutoAccept.svelte";
   import StatusAutomations from "$lib/views/vrchat/StatusAutomations.svelte";
   import SleepingPose from "$lib/views/vrchat/SleepingPose.svelte";
+  import SafetyNet from "$lib/views/vrchat/SafetyNet.svelte";
   import Account from "$lib/views/settings/Account.svelte";
   import Schedule from "$lib/views/settings/Schedule.svelte";
   import SleepDetection from "$lib/views/settings/SleepDetection.svelte";
@@ -41,6 +42,7 @@
         { id: "autoaccept", label: "Auto-Accept" },
         { id: "statusauto", label: "Status Automations" },
         { id: "sleepingpose", label: "Sleeping Pose" },
+        { id: "safetynet", label: "Safety Net" },
       ],
     },
     { id: "osc", label: "OSC" },
@@ -98,8 +100,10 @@
               <AutoAccept />
             {:else if sub === "statusauto"}
               <StatusAutomations />
-            {:else}
+            {:else if sub === "sleepingpose"}
               <SleepingPose />
+            {:else}
+              <SafetyNet />
             {/if}
           {:else if active === "settings"}
             {#if sub === "account"}

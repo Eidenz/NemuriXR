@@ -11,7 +11,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::state::{SleepPhase, SleepPosition, State};
+use crate::state::{SleepPhase, SleepPosition, SleepTrigger, State};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
@@ -22,8 +22,13 @@ pub enum Request {
     SetConfig { config: Config },
     /// Fetch the live runtime state.
     GetState,
-    /// Command the sleep phase (Awake / Prepare / Sleep).
-    SetPhase { phase: SleepPhase },
+    /// Command the sleep phase (Awake / Prepare / Sleep). `trigger` says how it
+    /// was initiated (default Manual) so auto-only automations can gate on it.
+    SetPhase {
+        phase: SleepPhase,
+        #[serde(default)]
+        trigger: SleepTrigger,
+    },
     /// Report the current physical lying position (drives the sleeping-pose OSC).
     SetSleepingPosition { position: SleepPosition },
 }
@@ -157,8 +162,8 @@ impl Client {
         }
     }
 
-    pub fn set_phase(&mut self, phase: SleepPhase) -> Result<()> {
-        match self.request(&Request::SetPhase { phase })? {
+    pub fn set_phase(&mut self, phase: SleepPhase, trigger: SleepTrigger) -> Result<()> {
+        match self.request(&Request::SetPhase { phase, trigger })? {
             Response::Ok => Ok(()),
             Response::Error { message } => anyhow::bail!(message),
             _ => anyhow::bail!("unexpected response"),

@@ -109,6 +109,18 @@ pub fn send_sequence(target: SocketAddr, messages: Vec<CfgMsg>) {
     });
 }
 
+/// Press + release VRChat's Voice input — toggles mic mute (in toggle-voice
+/// mode). Used by the safety net's in-game mute.
+pub fn voice_toggle(target: SocketAddr) {
+    send_sequence(
+        target,
+        vec![
+            CfgMsg { address: "/input/Voice".to_string(), args: vec![OscArg::Int(1)], delay_ms: 0 },
+            CfgMsg { address: "/input/Voice".to_string(), args: vec![OscArg::Int(0)], delay_ms: 150 },
+        ],
+    );
+}
+
 fn to_osc(a: &OscArg) -> OscType {
     match a {
         OscArg::Bool(b) => OscType::Bool(*b),

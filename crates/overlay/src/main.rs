@@ -30,7 +30,7 @@ use client::{Detection, EngineLink};
 use detector::{classify_position, nearest_pose_deg, Detector, Tick};
 use mathx::{gravity_local, locate_pose};
 use nemurixr_core::config::SleepPose;
-use nemurixr_core::{SleepPhase, SleepPosition};
+use nemurixr_core::{SleepPhase, SleepPosition, SleepTrigger};
 use overlay::{front_pose, posef, Input, Laser, Panel, TargetId};
 use ui::{build_countdown, build_menu, build_toast, MenuAction, Screen};
 
@@ -237,7 +237,7 @@ fn run() -> Result<()> {
         let hmd_ref = hmd.unwrap_or(xr::Posef::IDENTITY);
         let mut countdown_secs: Option<u32> = None;
         match detector.update(det_active, &hmd_ref, controller_active, det.sensitivity, det.minutes) {
-            Tick::Sleep => link.set_phase(SleepPhase::Sleep),
+            Tick::Sleep => link.set_phase(SleepPhase::Sleep, SleepTrigger::Detection),
             Tick::Counting(s) => countdown_secs = Some(s),
             Tick::Idle => {}
         }
@@ -245,7 +245,7 @@ fn run() -> Result<()> {
         // Sleeping-pose: while asleep, report which way you're lying so the engine
         // can pose the avatar. A new position must hold ~1.5s before it commits,
         // so rolling over / boundary jitter doesn't thrash the pose.
-        if link.sleeping_pose_enabled() && phase == SleepPhase::Sleep {
+        if link.report_position() && phase == SleepPhase::Sleep {
             if let Some(g) = g_local {
                 let pos = classify_position(g);
                 if last_position == Some(pos) {
@@ -302,7 +302,7 @@ fn run() -> Result<()> {
                 action = build_menu(ctx, screen, phase, connected, &clock, &mut cfg, &mut cfg_changed, capture_secs, panel_alpha);
             })?;
             match action {
-                MenuAction::SetPhase(p) => link.set_phase(p),
+                MenuAction::SetPhase(p) => link.set_phase(p, SleepTrigger::Manual),
                 MenuAction::OpenAutomations => screen = Screen::Automations,
                 MenuAction::OpenCalibrate => screen = Screen::Calibrate,
                 MenuAction::CapturePose => capture_at = Some(Instant::now() + CALIB_DELAY),
