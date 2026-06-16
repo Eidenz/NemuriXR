@@ -51,7 +51,7 @@ On GNOME the system tray needs the AppIndicator extension; on KDE it works out o
 ## Install
 
 ### From release
-- Just head over to the [lates release]() and download the file for your distro.
+- Just head over to the [latest release](https://github.com/Eidenz/NemuriXR/releases/latest) and download the file for your distro.
 
 ### Build from source
 Build a package and install it:
