@@ -19,12 +19,15 @@ Inspired by [OyasumiVR](https://github.com/Raphiiko/Oyasumi). *Nemuri* (眠り) 
 NemuriXR can notice when you're heading to sleep in VR and handles the things you'd otherwise fumble with half-asleep:
 
 - **🌙 Sleep Mode, in three phases**: *Awake → Prepare → Sleep*. Switch it manually, on a schedule, or automatically once you stop moving. Motion detection can be calibrated in-headset so it knows how *you* sleep.
+- **⏰ Wake-up**: wake automatically at a set time with an optional alarm sound, independent of the sleep schedule, so you can use one without the other.
 - **🔆 Brightness & fans**: ease the panel brightness and fan speed down as you settle in, with smooth fades. Native control for the **Bigscreen Beyond**; other Monado headsets dim through libmonado.
 - **🔊 Audio volume**: lower your output volume and mute your mic per phase. It finds the device VRChat is actually playing through and adjusts that one, falling back to your default device.
 - **🎮 VRChat, hands-free**:
   - Join/leave **notification sounds** and a live player count, read straight from the game log.
-  - **Auto-accept invite requests** from chosen friends, with player-count limits and an optional custom invite message *(signing in unlocks this)*.
+  - **Auto-accept invite requests** from chosen friends, with player-count limits and an optional custom invite message, plus a custom decline message for the ones it turns down *(signing in unlocks this)*.
   - **Status automations**: flip to *Ask Me* or *Busy* as your world fills up.
+  - **In-headset toasts** when an invite is accepted or your status changes, so you know what happened without leaving VR.
+- **🖥️ Run commands**: run a shell command or app on each phase: smart lights, a notification, suspend, anything.
 - **📡 OSC automations**: send sequences of OSC messages on each phase (avatar toggles, other apps, and so on).
 
 You set everything up in a desktop app, and reach the toggles you actually want in VR from a quick in-headset menu.
