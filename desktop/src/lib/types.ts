@@ -4,6 +4,10 @@ export type ListMode = "whitelist" | "blacklist";
 export type VrcStatus = "join_me" | "active" | "ask_me" | "busy";
 export type SleepPhase = "awake" | "prepare" | "sleep";
 export type Sensitivity = "low" | "medium" | "high";
+export interface SleepPose {
+  name: string;
+  gravity: [number, number, number];
+}
 
 export interface BrightnessLevel {
   brightness: number; // 0-100
@@ -38,7 +42,7 @@ export interface SleepConfig {
   detect_end: string; // "HH:MM"
   detection_sensitivity: Sensitivity;
   detection_minutes: number;
-  detection_poses: number[][]; // calibrated head-local gravity vectors
+  detection_poses: SleepPose[]; // calibrated sleep poses
   detection_pose_tolerance: number; // degrees
   wake: WakeConfig;
 }

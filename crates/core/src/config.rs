@@ -55,10 +55,10 @@ pub struct SleepConfig {
     pub detection_minutes: u32,
 
     // ---- optional sleep-pose calibration ----
-    /// Calibrated sleep poses, each the gravity direction in head-local space
-    /// (yaw-invariant). Empty = uncalibrated => stillness alone triggers; when
-    /// non-empty the head must also be near one of these poses.
-    pub detection_poses: Vec<[f32; 3]>,
+    /// Calibrated sleep poses. Empty = uncalibrated => stillness alone triggers;
+    /// when non-empty the head must also be near one of these poses.
+    #[serde(default, deserialize_with = "de_sleep_poses")]
+    pub detection_poses: Vec<SleepPose>,
     /// Max angle (degrees) from a calibrated pose that still counts as "in pose".
     pub detection_pose_tolerance: u32,
 
@@ -79,6 +79,37 @@ pub struct WakeConfig {
     pub alarm_enabled: bool,
     /// Alarm sound file ("" = bundled default chime).
     pub alarm_sound: String,
+}
+
+/// One calibrated sleep pose: a user label plus the head-local gravity vector
+/// (yaw-invariant) used to recognise the posture.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SleepPose {
+    pub name: String,
+    pub gravity: [f32; 3],
+}
+
+/// Accept both the new `{name, gravity}` shape and the old bare `[x,y,z]` shape
+/// (pre-naming configs), so existing calibrations keep loading.
+fn de_sleep_poses<'de, D>(d: D) -> Result<Vec<SleepPose>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Compat {
+        New { name: String, gravity: [f32; 3] },
+        Old([f32; 3]),
+    }
+    let raw = Vec::<Compat>::deserialize(d)?;
+    Ok(raw
+        .into_iter()
+        .enumerate()
+        .map(|(i, c)| match c {
+            Compat::New { name, gravity } => SleepPose { name, gravity },
+            Compat::Old(gravity) => SleepPose { name: format!("Pose {}", i + 1), gravity },
+        })
+        .collect())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

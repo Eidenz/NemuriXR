@@ -29,6 +29,7 @@ use blocker::Blocker;
 use client::{Detection, EngineLink};
 use detector::{nearest_pose_deg, Detector, Tick};
 use mathx::{gravity_local, locate_pose};
+use nemurixr_core::config::SleepPose;
 use nemurixr_core::SleepPhase;
 use overlay::{front_pose, posef, Input, Laser, Panel, TargetId};
 use ui::{build_countdown, build_menu, build_toast, MenuAction, Screen};
@@ -290,7 +291,8 @@ fn run() -> Result<()> {
                     capture_at = None;
                     if let Some(g) = g_local {
                         let mut c = link.config();
-                        c.sleep.detection_poses.push(g);
+                        let n = c.sleep.detection_poses.len() + 1;
+                        c.sleep.detection_poses.push(SleepPose { name: format!("Pose {n}"), gravity: g });
                         link.set_config(c);
                         input.pulse(&xr.session, false);
                     }

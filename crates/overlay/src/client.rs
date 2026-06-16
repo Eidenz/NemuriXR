@@ -74,7 +74,7 @@ impl EngineLink {
             end: s.detect_end.clone(),
             sensitivity: s.detection_sensitivity,
             minutes: s.detection_minutes,
-            poses: s.detection_poses.clone(),
+            poses: s.detection_poses.iter().map(|p| p.gravity).collect(),
             pose_tolerance: s.detection_pose_tolerance,
         }
     }

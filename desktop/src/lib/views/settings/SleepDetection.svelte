@@ -12,9 +12,14 @@
   ];
 
   // Calibration is captured in-headset, so re-read config on open to show the
-  // latest saved pose count.
+  // latest saved poses.
   onMount(load);
 
+  function deletePose(i: number) {
+    if (!app.config) return;
+    app.config.sleep.detection_poses.splice(i, 1);
+    save();
+  }
   function clearPoses() {
     if (!app.config) return;
     app.config.sleep.detection_poses = [];
@@ -86,13 +91,25 @@
             {#if sleep.detection_poses.length === 0}
               None — stillness alone will trigger sleep
             {:else}
-              {sleep.detection_poses.length}
-              {sleep.detection_poses.length === 1 ? "pose" : "poses"} saved
+              {sleep.detection_poses.length} saved — detection only arms near one of these
             {/if}
           </span>
         </div>
-        <button class="clear" disabled={sleep.detection_poses.length === 0} onclick={clearPoses}>Clear all</button>
+        {#if sleep.detection_poses.length > 0}
+          <button class="clear" onclick={clearPoses}>Clear all</button>
+        {/if}
       </div>
+
+      {#if sleep.detection_poses.length > 0}
+        <div class="poses">
+          {#each sleep.detection_poses as pose, i (i)}
+            <div class="pose">
+              <input class="pose-name" type="text" bind:value={pose.name} placeholder="Pose name" onchange={save} />
+              <button class="del" aria-label="Delete pose" title="Delete pose" onclick={() => deletePose(i)}>✕</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
 
       <div class="row slider" class:dim={sleep.detection_poses.length === 0}>
         <Slider
@@ -106,8 +123,8 @@
       </div>
 
       <p class="hint">
-        To calibrate, put on the headset and open the menu (double-tap <strong>A</strong> on the right controller), then choose
-        <strong>Calibrate sleep pose</strong>. Lie down the way you sleep and capture — add a pose for each position you use.
+        To add a pose, put on the headset and open the menu (double-tap <strong>A</strong> on the right controller), then choose
+        <strong>Calibrate sleep pose</strong>. Lie down the way you sleep and capture — add one per position you use, then name them here.
       </p>
     </div>
   </GlassCard>
@@ -177,6 +194,49 @@
   input[type="time"]:focus {
     outline: none;
     border-color: hsl(var(--primary) / 0.6);
+  }
+  .poses {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 0 4px;
+  }
+  .pose {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pose-name {
+    flex: 1;
+    min-width: 0;
+    height: 36px;
+    border-radius: var(--radius-s);
+    border: 1px solid hsl(var(--glass-border) / 0.1);
+    background: hsl(var(--glass-bg) / 0.5);
+    color: hsl(var(--foreground));
+    padding: 0 12px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .pose-name:focus {
+    outline: none;
+    border-color: hsl(var(--primary) / 0.6);
+  }
+  .del {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-s);
+    border: 1px solid hsl(var(--glass-border) / 0.1);
+    background: hsl(var(--glass-bg) / 0.5);
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    font-size: 13px;
+    transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+  }
+  .del:hover {
+    color: hsl(0 70% 68%);
+    border-color: hsl(0 70% 68% / 0.5);
   }
   .clear {
     height: 36px;
