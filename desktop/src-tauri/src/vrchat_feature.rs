@@ -22,7 +22,35 @@ const UA: &str = "NemuriXR/0.1.0 (https://github.com/eidenz/nemurixr)";
 
 pub fn spawn(engine: Arc<Mutex<Engine>>, api: SharedApi) {
     spawn_pipeline(engine.clone(), api.clone());
-    spawn_status_automation(engine, api);
+    spawn_status_automation(engine.clone(), api.clone());
+    spawn_friends_refresh(engine, api);
+}
+
+// ---- friends cache (for join notifications' "friends only" filter) ---------
+
+/// Keep the engine's friend set fresh while signed in (re-fetched every ~6 h,
+/// cleared on sign-out). Grabs the client+cookie under a brief lock, then fetches
+/// lock-free (the list can be large), like the friends picker does.
+fn spawn_friends_refresh(engine: Arc<Mutex<Engine>>, api: SharedApi) {
+    std::thread::spawn(move || {
+        let mut last_fetch: Option<std::time::Instant> = None;
+        loop {
+            let logged_in = api.lock().unwrap().login_status().logged_in;
+            if !logged_in {
+                if last_fetch.take().is_some() {
+                    engine.lock().unwrap().set_friends(None);
+                }
+            } else if last_fetch.is_none_or(|t| t.elapsed() > Duration::from_secs(6 * 60 * 60)) {
+                let req = api.lock().unwrap().friends_request();
+                if let Some((client, cookie)) = req {
+                    let list = crate::vrchat_api::fetch_friends(&client, &cookie);
+                    engine.lock().unwrap().set_friends(Some(list));
+                    last_fetch = Some(std::time::Instant::now());
+                }
+            }
+            std::thread::sleep(Duration::from_secs(60));
+        }
+    });
 }
 
 // ---- pipeline websocket → auto-accept --------------------------------------

@@ -292,6 +292,9 @@ pub struct JoinNotifyConfig {
     /// Only notify when you were alone before the join / are alone after the leave.
     pub only_when_alone: bool,
     pub only_when_sleep: bool,
+    /// Only notify for players on your VRChat friends list (needs sign-in; when
+    /// signed out it can't filter, so it notifies for everyone).
+    pub friends_only: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -433,6 +436,7 @@ impl Default for JoinNotifyConfig {
             leave_sound: String::new(),
             only_when_alone: true,
             only_when_sleep: false,
+            friends_only: true,
         }
     }
 }

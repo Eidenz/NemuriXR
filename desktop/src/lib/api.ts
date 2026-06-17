@@ -37,6 +37,7 @@ export const vrchatLogin = (username: string, password: string) => invoke<LoginO
 export const vrchatVerify2fa = (method: string, code: string) => invoke<LoginOutcome>("vrchat_verify_2fa", { method, code });
 export const vrchatLogout = () => invoke<LoginStatus>("vrchat_logout");
 export const vrchatFriends = () => invoke<Friend[]>("vrchat_friends");
+export const vrchatRefreshFriends = () => invoke<Friend[]>("vrchat_refresh_friends");
 export const vrchatMessages = (kind: MessageKind) => invoke<InviteMessage[]>("vrchat_messages", { kind });
 export const vrchatUpdateMessage = (kind: MessageKind, slot: number, text: string) =>
   invoke<InviteMessage[]>("vrchat_update_message", { kind, slot, text });

@@ -21,6 +21,13 @@
         <Toggle bind:checked={n.only_when_alone} label="Only when alone" onchange={save} />
       </div>
       <div class="row">
+        <div class="txt">
+          <span class="t">Friends only</span>
+          <span class="d">Only notify for players on your friends list (needs sign-in; otherwise notifies for everyone)</span>
+        </div>
+        <Toggle bind:checked={n.friends_only} label="Friends only" onchange={save} />
+      </div>
+      <div class="row">
         <div class="txt"><span class="t">Only when sleep mode is enabled</span></div>
         <Toggle bind:checked={n.only_when_sleep} label="Only when sleeping" onchange={save} />
       </div>

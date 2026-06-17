@@ -75,6 +75,7 @@ export interface JoinNotifyConfig {
   leave_sound: string;
   only_when_alone: boolean;
   only_when_sleep: boolean;
+  friends_only: boolean;
 }
 export interface StatusConfig {
   enabled: boolean;

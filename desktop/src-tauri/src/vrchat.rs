@@ -73,6 +73,8 @@ struct Notify {
     is_join: bool,
     /// "were you alone before this join" / "are you alone after this leave".
     alone: bool,
+    /// The player's usr id (or display name) — for the friends-only filter.
+    key: String,
 }
 
 #[derive(Default)]
@@ -151,14 +153,14 @@ impl Watcher {
             let was_alone = self.remote_count() == 0;
             let is_new = self.players.insert(key.clone());
             if is_new && self.live && !self.is_self(&key) && !self.suppressed() {
-                return Some(Notify { is_join: true, alone: was_alone });
+                return Some(Notify { is_join: true, alone: was_alone, key });
             }
         } else if rest.starts_with("OnPlayerLeft ") && !rest.starts_with("OnPlayerLeftRoom") {
             let key = player_key(&rest["OnPlayerLeft ".len()..]);
             let removed = self.players.remove(&key);
             if removed && self.live && !self.is_self(&key) && !self.suppressed() {
                 let now_alone = self.remote_count() == 0;
-                return Some(Notify { is_join: false, alone: now_alone });
+                return Some(Notify { is_join: false, alone: now_alone, key });
             }
         } else if let Some(room) = rest.strip_prefix("Joining or Creating Room: ") {
             self.world = Some(room.trim().to_string());
@@ -237,7 +239,7 @@ fn read_new(path: &Path, offset: &mut u64, w: &mut Watcher, engine: &Arc<Mutex<E
                 }
                 *offset += n as u64;
                 if let Some(ev) = w.process_line(line.trim_end()) {
-                    if let Some(snd) = engine.lock().unwrap().join_notify_sound(ev.is_join, ev.alone) {
+                    if let Some(snd) = engine.lock().unwrap().join_notify_sound(ev.is_join, ev.alone, &ev.key) {
                         sound::play_notification(if ev.is_join { "join" } else { "leave" }, &snd);
                     }
                 }

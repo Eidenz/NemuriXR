@@ -62,6 +62,9 @@ pub(crate) struct Engine {
     /// Last lying position the overlay reported (so the safety net can pose you
     /// the instant it activates, without waiting for the next position change).
     last_position: SleepPosition,
+    /// Cached friends list — shared by the join-notifications "friends only"
+    /// filter and the auto-accept friend picker. `None` = not signed in / unknown.
+    friends: Option<Vec<Friend>>,
 }
 
 impl Engine {
@@ -85,6 +88,7 @@ impl Engine {
             safety_net_muted_device: false,
             safety_net_muted_ingame: false,
             last_position: SleepPosition::Upright,
+            friends: None,
         }
     }
 
@@ -335,7 +339,8 @@ impl Engine {
     /// Decide whether to play a join/leave sound, returning the configured sound
     /// path ("" = bundled default) when it should play. `alone_condition` is
     /// "were you alone before this join" / "are you alone after this leave".
-    pub(crate) fn join_notify_sound(&self, is_join: bool, alone_condition: bool) -> Option<String> {
+    /// `key` is the player's usr id (or display name) for the friends filter.
+    pub(crate) fn join_notify_sound(&self, is_join: bool, alone_condition: bool, key: &str) -> Option<String> {
         let n = &self.config.vrchat.join_notifications;
         if !n.enabled {
             return None;
@@ -346,7 +351,27 @@ impl Engine {
         if n.only_when_sleep && !self.state.sleep_phase.is_active() {
             return None;
         }
+        // Friends-only: filter when we have a friends list (signed in). When we
+        // don't (signed out), we can't tell, so we don't suppress.
+        if n.friends_only {
+            if let Some(friends) = &self.friends {
+                let is_friend = friends.iter().any(|f| f.id == key || f.display_name.eq_ignore_ascii_case(key));
+                if !is_friend {
+                    return None;
+                }
+            }
+        }
         Some(if is_join { n.join_sound.clone() } else { n.leave_sound.clone() })
+    }
+
+    /// Update the cached friends list; `None` = signed out / unknown.
+    pub(crate) fn set_friends(&mut self, friends: Option<Vec<Friend>>) {
+        self.friends = friends;
+    }
+
+    /// The cached friends list, if any (for the picker, without a fetch).
+    pub(crate) fn friends_list(&self) -> Option<Vec<Friend>> {
+        self.friends.clone()
     }
 }
 
@@ -519,21 +544,39 @@ async fn install_beyond_rule() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(udev::install).await.map_err(|e| e.to_string())?
 }
 
-/// Friends list for the auto-accept whitelist picker. Async + spawn_blocking so
-/// the multi-page fetch runs off the main thread (no UI freeze); grabs the
-/// client + cookie under a brief lock, then fetches all pages without holding it.
+/// Fetch the full friends list (off the main thread) and store it in the engine
+/// cache shared with the join-notifications filter. Empty on logout/rate-limit
+/// (the cache is left untouched then).
+fn fetch_and_cache_friends(engine: &Shared, api: &SharedApi) -> Vec<Friend> {
+    let req = api.lock().unwrap().friends_request();
+    let list = match req {
+        Some((client, cookie)) => vrchat_api::fetch_friends(&client, &cookie),
+        None => Vec::new(),
+    };
+    if !list.is_empty() {
+        engine.lock().unwrap().set_friends(Some(list.clone()));
+    }
+    list
+}
+
+/// Friends list for the auto-accept picker — returns the shared cache when it's
+/// already populated (e.g. by the background refresh), otherwise fetches once.
 #[tauri::command]
-async fn vrchat_friends(vrc: tauri::State<'_, SharedApi>) -> Result<Vec<Friend>, String> {
-    let api = vrc.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let req = api.lock().unwrap().friends_request();
-        match req {
-            Some((client, cookie)) => vrchat_api::fetch_friends(&client, &cookie),
-            None => Vec::new(),
+async fn vrchat_friends(engine: tauri::State<'_, Shared>, vrc: tauri::State<'_, SharedApi>) -> Result<Vec<Friend>, String> {
+    if let Some(list) = engine.lock().unwrap().friends_list() {
+        if !list.is_empty() {
+            return Ok(list);
         }
-    })
-    .await
-    .map_err(|e| e.to_string())
+    }
+    let (e, api) = (engine.inner().clone(), vrc.inner().clone());
+    tauri::async_runtime::spawn_blocking(move || fetch_and_cache_friends(&e, &api)).await.map_err(|e| e.to_string())
+}
+
+/// Force a fresh friends fetch (the picker's ↻), updating the shared cache.
+#[tauri::command]
+async fn vrchat_refresh_friends(engine: tauri::State<'_, Shared>, vrc: tauri::State<'_, SharedApi>) -> Result<Vec<Friend>, String> {
+    let (e, api) = (engine.inner().clone(), vrc.inner().clone());
+    tauri::async_runtime::spawn_blocking(move || fetch_and_cache_friends(&e, &api)).await.map_err(|e| e.to_string())
 }
 
 /// Message templates for the picker. `kind` is "message" (accept) or
@@ -641,6 +684,7 @@ pub fn run() {
             vrchat_logout,
             vrchat_status,
             vrchat_friends,
+            vrchat_refresh_friends,
             vrchat_messages,
             vrchat_update_message
         ])

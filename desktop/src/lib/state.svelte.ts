@@ -1,6 +1,6 @@
 // Shared reactive state (Svelte 5 runes). Polls the overlay/core over the Tauri
 // IPC bridge; edits flow back via `save()` (debounced).
-import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends, beyondStatus, appVersion, checkUpdate } from "./api";
+import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends, vrchatRefreshFriends, beyondStatus, appVersion, checkUpdate } from "./api";
 import type { BeyondStatus, UpdateInfo } from "./api";
 import type { Config, Friend, LoginStatus, SleepPhase, State } from "./types";
 
@@ -50,11 +50,12 @@ export function cacheFriendName(id: string, name: string) {
 }
 
 let friendsLoaded = false;
-/** Fetch the friends list once (cached across tab switches); `force` re-fetches. */
+/** Fetch the friends list once (cached across tab switches); `force` re-fetches.
+ * Both share the backend's friends cache (also used by join notifications). */
 export async function loadVrchatFriends(force = false) {
   if (!force && (friendsLoaded || app.vrchatFriends.length > 0)) return;
   try {
-    app.vrchatFriends = await vrchatFriends();
+    app.vrchatFriends = force ? await vrchatRefreshFriends() : await vrchatFriends();
     friendsLoaded = true;
     for (const f of app.vrchatFriends) app.friendNames[f.id] = f.display_name;
     persistNames();
