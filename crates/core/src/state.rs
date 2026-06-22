@@ -69,6 +69,9 @@ pub struct State {
     pub notice: Option<String>,
     /// Bumped every time `notice` is set; the overlay toasts when it changes.
     pub notice_seq: u64,
+    /// True while the wake-up alarm is ringing — the overlay and desktop show a
+    /// big Stop button while this is set.
+    pub alarm_active: bool,
     /// True while the in-headset overlay/core is running and serving IPC.
     pub overlay_running: bool,
 }

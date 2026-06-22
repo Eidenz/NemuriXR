@@ -170,5 +170,6 @@ export interface State {
   brightness_backend: string | null;
   osc_target: string | null;
   audio_target: string | null;
+  alarm_active: boolean;
   overlay_running: boolean;
 }

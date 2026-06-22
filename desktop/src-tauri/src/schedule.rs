@@ -50,21 +50,23 @@ fn run(engine: Arc<Mutex<Engine>>) {
 }
 
 /// Scheduled wake: go to Awake (brightness eases in over the wake fade time),
-/// then play the alarm once that ramp finishes — but only if you're still awake
-/// (didn't go back to sleep). Only called when auto-wake is on.
+/// then ring the alarm once that ramp finishes — but only if you're still awake
+/// (didn't go back to sleep). The alarm loops until dismissed (overlay/desktop
+/// Stop button). Only called when auto-wake is on.
 fn wake_up(engine: &Arc<Mutex<Engine>>) {
-    let (alarm_enabled, alarm_sound, delay) = {
+    let (alarm_enabled, delay) = {
         let g = engine.lock().unwrap();
         let delay = if g.config.brightness.enabled { g.config.brightness.on_wake.transition_seconds as u64 } else { 0 };
-        (g.config.sleep.wake.alarm_enabled, g.config.sleep.wake.alarm_sound.clone(), delay)
+        (g.config.sleep.wake.alarm_enabled, delay)
     };
     engine.lock().unwrap().set_phase(SleepPhase::Awake, SleepTrigger::Schedule);
     if alarm_enabled {
         let engine = engine.clone();
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(delay));
-            if engine.lock().unwrap().state.sleep_phase == SleepPhase::Awake {
-                crate::sound::play_notification("alarm", &alarm_sound);
+            let mut g = engine.lock().unwrap();
+            if g.state.sleep_phase == SleepPhase::Awake {
+                g.start_alarm();
             }
         });
     }

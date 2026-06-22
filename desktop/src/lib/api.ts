@@ -7,6 +7,7 @@ export const getState = () => invoke<State>("get_state");
 export const setPhase = (phase: SleepPhase) => invoke("set_phase", { phase });
 export const testSound = (kind: "join" | "leave") => invoke("test_sound", { kind });
 export const testAlarm = () => invoke("test_alarm");
+export const stopAlarm = () => invoke("stop_alarm");
 export const applyBrightness = (which: SleepPhase) => invoke("apply_brightness", { which });
 export const sendOsc = (which: SleepPhase) => invoke("send_osc", { which });
 export const applyAudio = (which: SleepPhase) => invoke("apply_audio", { which });

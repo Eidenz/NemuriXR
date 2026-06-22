@@ -1,6 +1,6 @@
 // Shared reactive state (Svelte 5 runes). Polls the overlay/core over the Tauri
 // IPC bridge; edits flow back via `save()` (debounced).
-import { getConfig, setConfig, getState, setPhase, vrchatStatus, vrchatFriends, vrchatRefreshFriends, beyondStatus, appVersion, checkUpdate } from "./api";
+import { getConfig, setConfig, getState, setPhase, stopAlarm, vrchatStatus, vrchatFriends, vrchatRefreshFriends, beyondStatus, appVersion, checkUpdate } from "./api";
 import type { BeyondStatus, UpdateInfo } from "./api";
 import type { Config, Friend, LoginStatus, SleepPhase, State } from "./types";
 
@@ -133,6 +133,16 @@ export async function setSleepPhase(phase: SleepPhase) {
     if (app.state) app.state.sleep_phase = phase;
   } catch (e) {
     console.error("setPhase failed", e);
+  }
+}
+
+/** Stop the ringing wake-up alarm (reflects locally so the banner hides at once). */
+export async function stopAlarmNow() {
+  if (app.state) app.state.alarm_active = false;
+  try {
+    await stopAlarm();
+  } catch (e) {
+    console.error("stopAlarm failed", e);
   }
 }
 

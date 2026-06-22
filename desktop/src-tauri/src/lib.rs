@@ -65,6 +65,8 @@ pub(crate) struct Engine {
     /// Cached friends list — shared by the join-notifications "friends only"
     /// filter and the auto-accept friend picker. `None` = not signed in / unknown.
     friends: Option<Vec<Friend>>,
+    /// The currently-ringing wake-up alarm, if any (dropping it stops the sound).
+    alarm: Option<sound::Alarm>,
 }
 
 impl Engine {
@@ -89,6 +91,7 @@ impl Engine {
             safety_net_muted_ingame: false,
             last_position: SleepPosition::Upright,
             friends: None,
+            alarm: None,
         }
     }
 
@@ -250,17 +253,46 @@ impl Engine {
         self.config.save();
     }
 
+    /// Start ringing the wake-up alarm (replacing any current one) and flag it so
+    /// the overlay and desktop show a Stop button.
+    fn start_alarm(&mut self) {
+        let custom = self.config.sleep.wake.alarm_sound.clone();
+        self.alarm = Some(sound::Alarm::start(&custom));
+        self.state.alarm_active = true;
+        log::info!("wake-up alarm ringing");
+    }
+
+    /// Stop the wake-up alarm if it's ringing (idempotent).
+    fn stop_alarm(&mut self) {
+        if self.alarm.take().is_some() {
+            log::info!("wake-up alarm stopped");
+        }
+        self.state.alarm_active = false;
+    }
+
     fn set_phase(&mut self, phase: SleepPhase, _trigger: SleepTrigger) {
-        if self.state.sleep_phase == phase {
+        let prev_phase = self.state.sleep_phase;
+        if prev_phase == phase {
             return;
         }
         self.state.sleep_phase = phase;
         log::info!("sleep phase -> {phase:?} ({_trigger:?})");
+        // A genuine phase change silences any ringing wake-up alarm.
+        self.stop_alarm();
         // Undo any safety-net actions when leaving sleep (however we wake).
         if phase == SleepPhase::Awake {
             self.revert_safety_net();
         }
         if self.config.brightness.enabled {
+            // Seed the fade's "from" point when we don't yet know the live level
+            // (e.g. the first transition after launch), using the brightness of
+            // the phase we're leaving. Without this the fade has no start point
+            // and snaps instantly — which is why a direct Awake→Sleep skipped its
+            // fade while Awake→Prepare→Sleep didn't (Prepare had primed the level).
+            if self.bright_current.lock().unwrap().is_none() {
+                let from = self.brightness_level(prev_phase);
+                *self.bright_current.lock().unwrap() = Some((from.brightness, from.fan));
+            }
             let level = self.brightness_level(phase);
             self.fade_brightness(level);
         }
@@ -451,6 +483,12 @@ fn test_command(engine: tauri::State<Shared>, which: String) {
 fn test_alarm(engine: tauri::State<Shared>) {
     let custom = engine.lock().unwrap().config.sleep.wake.alarm_sound.clone();
     sound::play_notification("alarm", &custom);
+}
+
+/// Stop the currently-ringing wake-up alarm.
+#[tauri::command]
+fn stop_alarm(engine: tauri::State<Shared>) {
+    engine.lock().unwrap().stop_alarm();
 }
 
 /// Preview a notification sound. `kind` is "join" or "leave".
@@ -650,6 +688,10 @@ pub fn run() {
                     g.apply_sleeping_pose(position);
                     Response::Ok
                 }
+                Request::StopAlarm => {
+                    g.stop_alarm();
+                    Response::Ok
+                }
             }
         }) {
             log::warn!("IPC server failed to start: {err} (overlay won't be able to connect)");
@@ -672,6 +714,7 @@ pub fn run() {
             test_sound,
             test_command,
             test_alarm,
+            stop_alarm,
             test_sleeping_pose,
             launch_overlay,
             app_version,

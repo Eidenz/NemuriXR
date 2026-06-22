@@ -39,7 +39,7 @@
       <div class="row" class:dim={!sleep.wake.enabled}>
         <div class="txt">
           <span class="t">Play an alarm sound</span>
-          <span class="d">Plays once you've woken</span>
+          <span class="d">Rings on a loop once you've woken, until you tap Stop (in the headset or here)</span>
         </div>
         <Toggle bind:checked={sleep.wake.alarm_enabled} label="Alarm" onchange={save} />
       </div>

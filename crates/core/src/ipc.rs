@@ -31,6 +31,8 @@ pub enum Request {
     },
     /// Report the current physical lying position (drives the sleeping-pose OSC).
     SetSleepingPosition { position: SleepPosition },
+    /// Stop the currently-ringing wake-up alarm.
+    StopAlarm,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -172,6 +174,14 @@ impl Client {
 
     pub fn set_sleeping_position(&mut self, position: SleepPosition) -> Result<()> {
         match self.request(&Request::SetSleepingPosition { position })? {
+            Response::Ok => Ok(()),
+            Response::Error { message } => anyhow::bail!(message),
+            _ => anyhow::bail!("unexpected response"),
+        }
+    }
+
+    pub fn stop_alarm(&mut self) -> Result<()> {
+        match self.request(&Request::StopAlarm)? {
             Response::Ok => Ok(()),
             Response::Error { message } => anyhow::bail!(message),
             _ => anyhow::bail!("unexpected response"),

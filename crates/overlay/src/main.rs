@@ -32,9 +32,10 @@ use mathx::{gravity_local, locate_pose};
 use nemurixr_core::config::SleepPose;
 use nemurixr_core::{SleepPhase, SleepPosition, SleepTrigger};
 use overlay::{front_pose, posef, Input, Laser, Panel, TargetId};
-use ui::{build_countdown, build_menu, build_toast, MenuAction, Screen};
+use ui::{build_alarm, build_countdown, build_menu, build_toast, MenuAction, Screen};
 
 const MENU: TargetId = 0;
+const ALARM: TargetId = 1;
 /// Delay between pressing "Capture a pose" and recording it — time to settle in.
 const CALIB_DELAY: Duration = Duration::from_secs(5);
 /// How long an event toast stays on screen.
@@ -101,6 +102,13 @@ fn run() -> Result<()> {
     let mut toast_panel =
         Panel::new(&gpu, &xr.session, toast_px, (toast_w, toast_w * toast_px.1 as f32 / toast_px.0 as f32), posef([0.0, 0.0, -1.0]))?;
 
+    // The ringing wake-up alarm panel (a big interactive Stop button), shown
+    // head-locked in front of you whenever the alarm goes off.
+    let alarm_px = (760u32, 540u32);
+    let alarm_w = 0.5f32;
+    let mut alarm_panel =
+        Panel::new(&gpu, &xr.session, alarm_px, (alarm_w, alarm_w * alarm_px.1 as f32 / alarm_px.0 as f32), posef([0.0, 0.0, -1.0]))?;
+
     // The link to the desktop-hosted engine (background thread; never blocks us).
     let link = EngineLink::spawn();
 
@@ -163,6 +171,16 @@ fn run() -> Result<()> {
         let engine_state = link.state();
         let connected = link.connected();
         let phase = engine_state.sleep_phase;
+        let alarm_active = engine_state.alarm_active;
+        let clock = chrono::Local::now().format("%H:%M").to_string();
+
+        // Keep the alarm panel head-locked in front of you while it's ringing, so
+        // the Stop button is always reachable wherever you're looking.
+        if alarm_active {
+            if let Some(h) = hmd {
+                alarm_panel.pose = front_pose(&h, 0.9, 0.0);
+            }
+        }
 
         // Event toasts: show a new notice once (ignore any that predate launch).
         match last_notice_seq {
@@ -179,8 +197,10 @@ fn run() -> Result<()> {
             toast = None;
         }
 
-        // Input: toggle the menu, then point/grab it.
+        // Input: toggle the menu, then point/grab the interactable panels (the
+        // menu when open, and the alarm's Stop button while it's ringing).
         let mut ptr: Option<(f32, f32, bool)> = None;
+        let mut alarm_ptr: Option<(f32, f32, bool)> = None;
         let mut laser_ray: Option<(xr::Posef, f32)> = None;
         let mut pointing_panel = false;
         let mut controller_active = false;
@@ -198,8 +218,14 @@ fn run() -> Result<()> {
                 }
                 log::info!("menu {}", if menu_visible { "shown" } else { "hidden" });
             }
+            let mut targets: Vec<(TargetId, xr::Posef, (f32, f32))> = Vec::new();
+            if alarm_active {
+                targets.push((ALARM, alarm_panel.pose, alarm_panel.size_m));
+            }
             if menu_visible {
-                let targets = [(MENU, menu.pose, menu.size_m)];
+                targets.push((MENU, menu.pose, menu.size_m));
+            }
+            if !targets.is_empty() {
                 let it = input.process(&xr.session, &xr.space, time, &targets)?;
                 for (tid, pose) in &it.moves {
                     if *tid == MENU {
@@ -207,6 +233,7 @@ fn run() -> Result<()> {
                     }
                 }
                 ptr = it.pointer(MENU);
+                alarm_ptr = it.pointer(ALARM);
                 laser_ray = it.laser;
                 pointing_panel = it.pointing_panel;
             }
@@ -279,7 +306,6 @@ fn run() -> Result<()> {
         let mut menu_quad = None;
         let mut laser_quad = None;
         if menu_visible {
-            let clock = chrono::Local::now().format("%H:%M").to_string();
             let capture_secs = capture_at.map(|t| {
                 let now = Instant::now();
                 if now >= t {
@@ -365,6 +391,20 @@ fn run() -> Result<()> {
             toast_quad = Some(toast_panel.quad(&xr.space, alpha_mode));
         }
 
+        // The ringing wake-up alarm: a big Stop button, head-locked in front of
+        // you. Tapping Stop tells the engine to silence the alarm.
+        let mut alarm_quad = None;
+        if alarm_active {
+            let mut stop = false;
+            alarm_panel.render(&gpu, alpha_mode, alarm_ptr, |ctx| {
+                stop = build_alarm(ctx, &clock, panel_alpha);
+            })?;
+            if stop {
+                link.stop_alarm();
+            }
+            alarm_quad = Some(alarm_panel.quad(&xr.space, alpha_mode));
+        }
+
         let mut layers: Vec<&xr::CompositionLayerBase<xr::Vulkan>> = Vec::new();
         if let Some(q) = &menu_quad {
             layers.push(q);
@@ -376,6 +416,9 @@ fn run() -> Result<()> {
             layers.push(q);
         }
         if let Some(q) = &toast_quad {
+            layers.push(q);
+        }
+        if let Some(q) = &alarm_quad {
             layers.push(q);
         }
         xr.frame_stream.end(time, xr.blend_mode, &layers)?;

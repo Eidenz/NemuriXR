@@ -27,6 +27,7 @@ enum Cmd {
     SetPhase(SleepPhase, SleepTrigger),
     SetConfig(Config),
     SetSleepingPosition(SleepPosition),
+    StopAlarm,
 }
 
 struct LinkState {
@@ -75,6 +76,13 @@ impl EngineLink {
     /// Report the current lying position to the engine (it sends the avatar OSC).
     pub fn set_sleeping_position(&self, position: SleepPosition) {
         let _ = self.tx.send(Cmd::SetSleepingPosition(position));
+    }
+
+    /// Ask the engine to stop the ringing wake-up alarm. Reflects locally at once
+    /// so the Stop button disappears without waiting for the next state poll.
+    pub fn stop_alarm(&self) {
+        self.shared.lock().unwrap().state.alarm_active = false;
+        let _ = self.tx.send(Cmd::StopAlarm);
     }
 
     pub fn detection(&self) -> Detection {
@@ -132,6 +140,7 @@ fn pump(c: &mut Client, shared: &Arc<Mutex<LinkState>>, rx: &Receiver<Cmd>) -> b
                 Cmd::SetPhase(p, t) => c.set_phase(p, t),
                 Cmd::SetConfig(cfg) => c.set_config(cfg),
                 Cmd::SetSleepingPosition(pos) => c.set_sleeping_position(pos),
+                Cmd::StopAlarm => c.stop_alarm(),
             };
             if r.is_err() {
                 return false;

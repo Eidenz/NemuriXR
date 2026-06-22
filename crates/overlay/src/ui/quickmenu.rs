@@ -78,6 +78,39 @@ pub fn build_countdown(ctx: &egui::Context, secs: u32, alpha: u8) {
     });
 }
 
+/// The ringing wake-up alarm panel: a big "Stop alarm" button, shown head-locked
+/// whenever the alarm is going off. Returns true on the frame Stop is tapped.
+pub fn build_alarm(ctx: &egui::Context, clock: &str, alpha: u8) -> bool {
+    let mut stop = false;
+    egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| {
+        theme::panel_card(ui, alpha, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(icons::ALARM).size(56.0).color(theme::WARN));
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new("Wake up").size(30.0).strong().color(Color32::WHITE));
+                ui.add_space(2.0);
+                ui.label(egui::RichText::new(format!("{}  {clock}", icons::CLOCK)).size(18.0).color(theme::ON_SURFACE_VAR));
+                ui.add_space(20.0);
+                stop = stop_button(ui);
+                ui.add_space(6.0);
+            });
+        });
+    });
+    stop
+}
+
+/// A large red "Stop alarm" button. Returns true on click.
+fn stop_button(ui: &mut egui::Ui) -> bool {
+    let w = ui.available_width();
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 104.0), Sense::click());
+    let fill = if resp.hovered() { Color32::from_rgb(224, 80, 80) } else { Color32::from_rgb(196, 58, 58) };
+    let p = ui.painter();
+    p.rect_filled(rect, egui::CornerRadius::same(18), fill);
+    p.text(rect.center(), Align2::CENTER_CENTER, format!("{}  Stop alarm", icons::STOP_CIRCLE), FontId::proportional(30.0), Color32::WHITE);
+    resp.clicked()
+}
+
 /// A small transient toast for engine events (auto-accepted invites, status
 /// changes…). `alpha` is the (possibly faded) panel opacity.
 pub fn build_toast(ctx: &egui::Context, text: &str, alpha: u8) {
