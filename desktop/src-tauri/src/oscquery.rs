@@ -3,7 +3,7 @@
 // VRChat advertises an OSCQuery HTTP service (mDNS `_oscjson._tcp`) that serves
 // each address "as well as their values (for readable value endpoints)". We GET
 // the node for a parameter and read its current value — used to tell whether
-// you're already in a GoGo pose, and your in-game mute state.
+// you've locked yourself in place, and your in-game mute state.
 //
 // All of this is best-effort: any failure (VRChat closed, OSC off, format quirk)
 // returns None and the caller falls back sensibly.
@@ -52,20 +52,10 @@ fn value0(node: &Value) -> Option<&Value> {
     node.get("VALUE").and_then(|v| v.as_array()).and_then(|a| a.first())
 }
 
-/// Are you currently in a GoGo Loco lying pose? (237 = back, 239 = front, 243 =
-/// side.) NOTE: GoGo's pose emotes are momentary (pulse back to 0), so this only
-/// catches the brief trigger window — it's a weak signal, not reliable.
-pub fn in_gogo_pose(http: SocketAddr) -> Option<bool> {
-    let node = get_node(http, "/avatar/parameters/Go/VRCEmote")?;
-    let emote = value0(&node).and_then(Value::as_i64);
-    Some(matches!(emote, Some(237) | Some(239) | Some(243)))
-}
-
-/// Your current in-game mic mute state (the `MuteSelf` parameter), if readable.
-/// Handles both `VALUE:[true]` and OSC's bool-as-type-tag (`TYPE:"T"/"F"`).
-pub fn mic_muted(http: SocketAddr) -> Option<bool> {
-    let node = get_node(http, "/avatar/parameters/MuteSelf")?;
-    if let Some(b) = value0(&node).and_then(Value::as_bool) {
+/// Read a boolean node value, handling both `VALUE:[true]` and OSC's
+/// bool-as-type-tag (`TYPE:"T"/"F"`).
+fn node_bool(node: &Value) -> Option<bool> {
+    if let Some(b) = value0(node).and_then(Value::as_bool) {
         return Some(b);
     }
     match node.get("TYPE").and_then(Value::as_str) {
@@ -73,4 +63,21 @@ pub fn mic_muted(http: SocketAddr) -> Option<bool> {
         Some("F") => Some(false),
         _ => None,
     }
+}
+
+/// Have you locked yourself in place? GoGo Loco's `Go/Stationary` (the
+/// feet/station anchor, set by the foot-lock preset) is a HELD boolean — true
+/// while you're anchored, e.g. once you've settled into a pose. The safety net
+/// reads it to tell "I set myself up, leave me be" from "I dozed off and might
+/// spin on a joystick". Unlike the pose emotes it does NOT pulse back to 0, so
+/// it's still readable the 15+ minutes later that motion detection fires.
+pub fn position_locked(http: SocketAddr) -> Option<bool> {
+    let node = get_node(http, "/avatar/parameters/Go/Stationary")?;
+    node_bool(&node)
+}
+
+/// Your current in-game mic mute state (the `MuteSelf` parameter), if readable.
+pub fn mic_muted(http: SocketAddr) -> Option<bool> {
+    let node = get_node(http, "/avatar/parameters/MuteSelf")?;
+    node_bool(&node)
 }

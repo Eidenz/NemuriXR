@@ -32,8 +32,8 @@
       </div>
       <div class="row sub" class:dim={!sn.enabled || !sn.pose}>
         <div class="txt">
-          <span class="t">Override an existing pose</span>
-          <span class="d">Re-pose even if you're already in a GoGo pose (default off)</span>
+          <span class="t">Override when locked in place</span>
+          <span class="d">Re-pose even if you've locked yourself in place (default off)</span>
         </div>
         <Toggle bind:checked={sn.pose_override_existing} label="Override existing pose" onchange={save} />
       </div>
@@ -56,7 +56,7 @@
 
     <p class="note">
       Everything here reverts when you wake. The pose uses the set configured under <strong>Sleeping Pose</strong>, and
-      "already in a GoGo pose" is detected by reading VRChat over OSCQuery.
+      whether you've "locked yourself in place" (GoGo's <code>Go/Stationary</code>) is detected by reading VRChat over OSCQuery.
     </p>
   </GlassCard>
 {/if}

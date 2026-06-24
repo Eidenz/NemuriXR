@@ -171,7 +171,8 @@ pub struct SafetyNetConfig {
     pub pose: bool,
     /// Skip the pose if FBT trackers are connected (you're posed already).
     pub pose_skip_if_trackers: bool,
-    /// Re-pose even if you're already in a GoGo pose (default off: leave it).
+    /// Re-pose even if you've already locked yourself in place (GoGo's
+    /// `Go/Stationary`) (default off: leave it).
     pub pose_override_existing: bool,
     /// Mute your VRChat mic in-game (OSC).
     pub mute_ingame: bool,

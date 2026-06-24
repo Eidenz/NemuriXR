@@ -1,6 +1,6 @@
 // Auto-sleep safety net: when you doze off (motion detection triggers sleep),
 // optionally mute your mic and pose your avatar — but only if you didn't set
-// yourself up (no FBT trackers, not already in a GoGo pose). A manual sleep
+// yourself up (no FBT trackers, not already locked in place). A manual sleep
 // never reaches here.
 //
 // Runs on its own thread because the checks are slow-ish (libmonado +
@@ -48,15 +48,15 @@ fn orchestrate(engine: &Arc<Mutex<Engine>>) {
         }
     }
 
-    // 3. Fallback pose — unless trackers are on or you're already posed.
+    // 3. Fallback pose — unless trackers are on or you've locked yourself in place.
     if sn.pose {
         let skip_trackers = sn.pose_skip_if_trackers && crate::trackers::present();
-        let already_posed =
-            !sn.pose_override_existing && http.and_then(crate::oscquery::in_gogo_pose).unwrap_or(false);
+        let already_locked =
+            !sn.pose_override_existing && http.and_then(crate::oscquery::position_locked).unwrap_or(false);
         if skip_trackers {
             log::info!("safety net: FBT trackers connected — leaving the pose to you");
-        } else if already_posed {
-            log::info!("safety net: already in a GoGo pose — leaving it");
+        } else if already_locked {
+            log::info!("safety net: position already locked (Go/Stationary) — leaving it");
         } else {
             // Turn the pose system on for this sleep and apply the last known
             // direction immediately (the overlay only re-reports on change).
