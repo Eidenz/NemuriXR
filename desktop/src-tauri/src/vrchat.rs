@@ -195,13 +195,17 @@ fn watch_loop(engine: Arc<Mutex<Engine>>) {
         }
         if let Some(path) = current.clone() {
             read_new(&path, &mut offset, &mut w, &engine);
-            // VRChat closed (or a stale log from a previous session): if the file
-            // hasn't changed in a while, we're not actually in a world.
-            if w.world.is_some() && log_is_stale(&path) {
+            // VRChat closed (force-quit leaves no OnLeftRoom): drop the world if
+            // the log has been quiet for a while AND no VRChat process is running.
+            // A quiet log ALONE is not enough — an idle/AFK sleep world can leave
+            // the log unwritten for minutes, and clearing the roster then would
+            // make the next join/leave look like it happened while you were alone,
+            // ringing "Only when previously alone" in a full instance.
+            if w.world.is_some() && log_is_stale(&path) && !vrchat_running() {
                 w.world = None;
                 w.instance = None;
                 w.players.clear();
-                log::info!("VRChat log idle for {STALE:?}; treating as not in a world");
+                log::info!("VRChat process gone and log idle for {STALE:?}; treating as not in a world");
             }
             publish(&engine, &w);
         }
@@ -214,6 +218,43 @@ fn log_is_stale(path: &Path) -> bool {
         Ok(mtime) => SystemTime::now().duration_since(mtime).map(|age| age > STALE).unwrap_or(false),
         Err(_) => true,
     }
+}
+
+/// Is a VRChat process currently running? On Linux VRChat runs under Proton/Wine,
+/// so the process command references `VRChat.exe`. Scans `/proc`. Used to tell
+/// "VRChat closed" from "VRChat idle" when the log is stale: a quiet log must not
+/// clear the roster unless VRChat is actually gone. Fail-safe — assumes running
+/// if `/proc` is unreadable, so an active session's roster is never wrongly wiped.
+fn vrchat_running() -> bool {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return true;
+    };
+    for entry in entries.flatten() {
+        // Only numeric PID directories.
+        let is_pid = entry
+            .file_name()
+            .to_str()
+            .is_some_and(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()));
+        if !is_pid {
+            continue;
+        }
+        let dir = entry.path();
+        // comm is the (truncated) process name; cmdline is NUL-separated argv.
+        // Either referencing VRChat.exe means VRChat is up.
+        let hit = std::fs::read(dir.join("comm")).is_ok_and(|b| contains_vrchat(&b))
+            || std::fs::read(dir.join("cmdline")).is_ok_and(|b| contains_vrchat(&b));
+        if hit {
+            return true;
+        }
+    }
+    false
+}
+
+/// Case-insensitive substring test for `vrchat.exe` in raw process bytes.
+fn contains_vrchat(haystack: &[u8]) -> bool {
+    const NEEDLE: &[u8] = b"vrchat.exe";
+    haystack.len() >= NEEDLE.len()
+        && haystack.windows(NEEDLE.len()).any(|w| w.eq_ignore_ascii_case(NEEDLE))
 }
 
 /// Read appended log lines since `offset`, processing complete lines only.
@@ -322,5 +363,15 @@ mod tests {
         let ev = w.process_line(r#"x [Behaviour] OnPlayerLeft Friend (usr_friend)"#).expect("notify");
         assert!(!ev.is_join && ev.alone);
         assert_eq!(w.player_count(), 1);
+    }
+
+    #[test]
+    fn detects_vrchat_in_process_bytes() {
+        // A Proton cmdline is NUL-separated argv ending in the exe path.
+        assert!(contains_vrchat(b"Z:\\home\\me\\.steam\\...\\VRChat.exe\0--foo\0"));
+        assert!(contains_vrchat(b"VRChat.exe\n")); // comm form
+        assert!(contains_vrchat(b"vrchat.exe")); // case-insensitive
+        assert!(!contains_vrchat(b"nemurixr-desktop\0"));
+        assert!(!contains_vrchat(b"")); // empty cmdline (kernel threads)
     }
 }

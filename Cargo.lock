@@ -485,7 +485,7 @@ checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
 
 [[package]]
 name = "nemurixr-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "log",
@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "nemurixr-overlay"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "ash",
