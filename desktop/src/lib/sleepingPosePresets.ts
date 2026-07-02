@@ -27,28 +27,26 @@ export const POSE_PRESETS: PosePreset[] = [
     lock_feet: true,
     // Every GoGo pose sets its params then PULSES the emote (value → 0): the
     // emote is a momentary trigger; holding it breaks the pose / the station.
+    // NOTE: Go/Float (GoGo Loco height) is intentionally NOT sent — it would
+    // overwrite the user's custom avatar height on every roll-over.
     on_back: [
-      f("/avatar/parameters/Go/Float", 0.04),
       f("/avatar/parameters/Go/PoseRadial", 0.5),
       i("/avatar/parameters/Go/VRCEmote", 237),
       release("/avatar/parameters/Go/VRCEmote"),
     ],
     on_front: [
-      f("/avatar/parameters/Go/Float", 0.03),
       f("/avatar/parameters/Go/PoseRadial", 0.5),
       i("/avatar/parameters/Go/VRCEmote", 239),
       release("/avatar/parameters/Go/VRCEmote"),
     ],
     on_left: [
       b("/avatar/parameters/Go/Mirror", true),
-      f("/avatar/parameters/Go/Float", 0.03),
       f("/avatar/parameters/Go/PoseRadial", 0.0),
       i("/avatar/parameters/Go/VRCEmote", 243),
       release("/avatar/parameters/Go/VRCEmote"),
     ],
     on_right: [
       b("/avatar/parameters/Go/Mirror", false),
-      f("/avatar/parameters/Go/Float", 0.03),
       f("/avatar/parameters/Go/PoseRadial", 0.0),
       i("/avatar/parameters/Go/VRCEmote", 243),
       release("/avatar/parameters/Go/VRCEmote"),
